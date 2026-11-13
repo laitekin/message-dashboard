@@ -1,0 +1,21 @@
+[Unit]
+Description=Aftersales event sync (aes sync: fetch all groups -> extract new conversations -> board)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=aesboard
+Group=aesboard
+# 拉取需要 docker exec vpn-proxy（数据源只允许 VPN 出口访问）
+SupplementaryGroups=docker
+WorkingDirectory=/opt/aftersales-board
+# 模型与数据源配置：AES_LLM_PROVIDER / AES_MODEL / DEEPSEEK_* / AES_FETCH_*（root 600，由 systemd 读取）
+EnvironmentFile=/opt/aftersales-board/.env
+ExecStart=/opt/aftersales-board/venv/bin/aes --config /opt/aftersales-board/config -v sync --uid 0
+# 首次运行要处理两天的全部对话，可能较久；超时被终止也没关系，已完成的窗口有缓存，下次接着做
+TimeoutStartSec=55min
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+Nice=10

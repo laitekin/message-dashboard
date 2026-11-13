@@ -11,7 +11,8 @@ from __future__ import annotations
 import hashlib
 import html
 import json
-from datetime import datetime
+import re
+from datetime import datetime, timedelta
 from importlib import resources
 from pathlib import Path
 from typing import Iterable
@@ -62,6 +63,37 @@ def evidence_messages(events: list[Event], messages: Iterable[Message]) -> dict[
     return out
 
 
+def clean_group_name(name: str) -> str:
+    """去掉群名末尾的 <...> 编号后缀和多余的连接符，便于展示。"""
+    n = re.sub(r"\s*<[^<>]*>\s*$", "", name or "")
+    return re.sub(r"[\s\-_]+$", "", n) or (name or "")
+
+
+def group_stats(messages: Iterable[Message], now: datetime | None = None) -> list[dict]:
+    """每个群的消息概况：总数、内部/客户条数、发言人数、首末消息时间、最近 24 小时消息数。"""
+    now = now or datetime.now()
+    day_ago = now - timedelta(hours=24)
+    acc: dict[str, dict] = {}
+    for m in messages:
+        g = acc.get(m.group_number)
+        if g is None:
+            g = acc[m.group_number] = {"id": m.group_number, "name": clean_group_name(m.group_name), "raw_name": m.group_name,
+                                       "uid": m.customer_uid, "messages": 0, "inner": 0, "customer": 0, "images": 0,
+                                       "recent_24h": 0, "first": m.send_time, "last": m.send_time, "_senders": set()}
+        g["messages"] += 1
+        g["inner" if m.role == "内部" else "customer"] += 1
+        g["images"] += int(m.is_image)
+        g["recent_24h"] += int(m.send_time >= day_ago)
+        g["first"], g["last"] = min(g["first"], m.send_time), max(g["last"], m.send_time)
+        g["_senders"].add(m.sender_id or m.sender)
+    out = []
+    for g in acc.values():
+        g["senders"] = len(g.pop("_senders"))
+        g["first"], g["last"] = g["first"].isoformat(), g["last"].isoformat()
+        out.append(g)
+    return sorted(out, key=lambda g: g["last"], reverse=True)
+
+
 def build_payload(
     events: list[Event],
     types: list[EventTypeDef] | None = None,
@@ -72,7 +104,9 @@ def build_payload(
     history: dict | None = None,
     api: bool = False,
     user: str | None = None,
+    sync: dict | None = None,
 ) -> dict:
+    messages = list(messages) if messages is not None else None
     type_defs = [{"name": t.name, "push_to": t.push_to} for t in (types or [])]
     known = {t["name"] for t in type_defs}
     for e in events:  # 配置里已停用、但历史结果里还有的类型也要能显示
@@ -96,6 +130,8 @@ def build_payload(
         "types": type_defs,
         "events": event_dicts,
         "messages": evidence_messages(events, messages) if messages is not None else {},
+        "groups": group_stats(messages) if messages is not None else [],
+        "sync": sync,
         "edits": edits,
         "history": history,
     }

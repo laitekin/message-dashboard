@@ -1,0 +1,38 @@
+# 追加到 /etc/caddy/Caddyfile。密码哈希用 `caddy hash-password` 生成后替换 <BCRYPT_HASH>。
+# 改完先 `caddy validate`；如果 validate 以 root 运行创建了日志文件，记得 chown caddy:caddy。
+board.latekin.cloud {
+	tls {
+		dns cloudflare {env.CF_API_TOKEN}
+		resolvers 1.1.1.1 8.8.8.8
+		protocols tls1.2 tls1.3
+	}
+	route {
+		import cf_only
+		basic_auth {
+			admin <BCRYPT_HASH>
+		}
+		reverse_proxy 127.0.0.1:8470 {
+			header_up X-Remote-User {http.auth.user.id}
+			header_up X-Real-IP {client_ip}
+			header_up X-Forwarded-For {client_ip}
+		}
+	}
+	encode zstd gzip
+	header {
+		-Server
+		Cache-Control "no-store"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+	}
+	request_body {
+		max_size 1MB
+	}
+	log {
+		output file /var/log/caddy/aftersales-board.log {
+			roll_size 10mb
+			roll_keep 5
+		}
+		format json
+	}
+}

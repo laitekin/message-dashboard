@@ -48,6 +48,10 @@ def test_page_and_data(server):
     data = json.loads(body)
     assert data["api"] is True and data["user"] == "alice"
     assert len(data["events"]) == 4 and data["messages"]
+    groups = {g["id"]: g for g in data["groups"]}
+    assert groups["R:1001"]["messages"] == 7 and groups["R:1001"]["inner"] == 3 and groups["R:1001"]["senders"] == 3
+    assert groups["R:1002"]["name"] == "示例客户&支持团队-1380000002" and groups["R:1002"]["uid"] == "1380000002"
+    assert data["sync"] is None
     assert req(base + "/healthz") == (200, "ok")
     assert req(base + "/nope")[0] == 404
 

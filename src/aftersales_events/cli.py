@@ -1,4 +1,4 @@
-"""命令行入口：aes fetch | preview | run | eval | board | serve"""
+"""命令行入口：aes fetch | preview | run | sync | eval | board | serve"""
 
 from __future__ import annotations
 
@@ -56,6 +56,16 @@ def cmd_run(args, settings) -> None:
     print(f"结果：{out / 'events.jsonl'}，报告：{out / 'report.md'}，看板：{out / 'board.html'}")
 
 
+def cmd_sync(args, settings) -> None:
+    from .sync import run_locked
+
+    status = run_locked(settings, args.lock, uid=args.uid, days=args.days, reprocess=args.reprocess,
+                        max_windows=args.max_windows, skip_fetch=args.no_fetch)
+    print(json.dumps(status, ensure_ascii=False, indent=2))
+    if not status.get("skipped") and not status.get("ok"):
+        sys.exit(1)
+
+
 def cmd_eval(args, settings) -> None:
     from .evaluate import evaluate, format_report, load_jsonl
 
@@ -83,7 +93,7 @@ def cmd_board(args, settings) -> None:
 def cmd_serve(args, settings) -> None:
     from .serve import BoardApp, make_server
 
-    app = BoardApp(settings, args.out_dir, args.raw_dir, args.state, title=args.title)
+    app = BoardApp(settings, args.out_dir, args.raw_dir, args.state, title=args.title, sync_status=args.sync_status)
     server = make_server(app, args.host, args.port)
     print(f"看板服务已启动：http://{args.host}:{server.server_address[1]}/（事件目录 {args.out_dir}，修改记录 {args.state}）")
     try:
@@ -121,6 +131,15 @@ def main(argv: list[str] | None = None) -> None:
     add_src(sp)
     sp.set_defaults(func=cmd_run)
 
+    sp = sub.add_parser("sync", help="增量处理：拉取最近几天 → 只抽取新增/变化的对话 → 合并写入看板目录（适合每小时运行）")
+    sp.add_argument("--uid", default="0", help="拉取的 UID（默认 0：全部群）")
+    sp.add_argument("--days", type=int, help="处理最近几天（默认取 sync.days）")
+    sp.add_argument("--max-windows", type=int, help="本次最多调用模型的窗口数")
+    sp.add_argument("--reprocess", action="store_true", help="忽略缓存全部重新抽取（改了 prompt 或事件定义后使用）")
+    sp.add_argument("--no-fetch", action="store_true", help="不拉取，只用已保存的原始文件")
+    sp.add_argument("--lock", default="data/sync.lock")
+    sp.set_defaults(func=cmd_sync)
+
     sp = sub.add_parser("eval", help="与人工标注对比")
     sp.add_argument("--pred", required=True)
     sp.add_argument("--gold", required=True)
@@ -140,6 +159,7 @@ def main(argv: list[str] | None = None) -> None:
     sp.add_argument("--host", default="127.0.0.1")
     sp.add_argument("--port", type=int, default=8470)
     sp.add_argument("--title", default="售后事件看板")
+    sp.add_argument("--sync-status", default="data/sync_status.json", help="aes sync 写出的状态文件，用于在看板上显示同步情况")
     sp.set_defaults(func=cmd_serve)
 
     args = p.parse_args(argv)

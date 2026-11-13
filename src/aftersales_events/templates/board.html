@@ -70,6 +70,8 @@ svg { display: block; flex: none; }
 .side-foot .sync { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .side-foot .dotlive { width: 6px; height: 6px; border-radius: 50%; background: var(--t6); flex: none; }
 .side-foot .dotlive.off { background: var(--faint); }
+.side-foot .dotlive.warn { background: var(--urgent); }
+.side-foot { flex-direction: column; align-items: stretch; gap: 3px; }
 
 /* ---------------------------------------------------------------- main */
 .main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
@@ -141,6 +143,26 @@ svg { display: block; flex: none; }
 .empty { display: grid; place-items: center; text-align: center; color: var(--muted); padding: 80px 20px; gap: 10px; }
 .empty h3 { margin: 0; color: var(--text); font-size: 14px; font-weight: 600; }
 .empty p { margin: 0; max-width: 360px; }
+
+/* ---------------------------------------------------------------- groups */
+.gt-head, .gt-row { display: grid; grid-template-columns: minmax(220px, 1fr) 128px minmax(120px, 240px) 120px 92px; align-items: center; gap: 12px; padding: 0 18px 0 22px; }
+.gt-head { position: sticky; top: 0; z-index: 2; height: 34px; background: var(--sidebar); border-bottom: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+.gt-row { height: 44px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.gt-row:hover { background: var(--hover); }
+.gt-name { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.gt-name .t { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gav { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; font-size: 11px; font-weight: 600; color: #fff; background: hsl(var(--h) 45% 50%); flex: none; }
+.gt-open { display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.gt-open b { font-weight: 600; }
+.gt-types { display: flex; gap: 8px; flex-wrap: nowrap; overflow: hidden; color: var(--muted); font-size: 12px; }
+.gt-types span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.gt-msgs, .gt-last { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gt-last.hot { color: var(--text-2); }
+.gseg { display: inline-flex; gap: 2px; }
+.gseg button { height: 24px; padding: 0 8px; border-radius: 6px; color: var(--muted); font-size: 12px; }
+.gseg button:hover { background: var(--hover); }
+.gseg button[aria-pressed="true"] { background: var(--active); color: var(--text); }
+.gsort { height: 24px; border: 1px solid var(--border-2); border-radius: 6px; background: var(--bg); font-size: 12px; padding: 0 4px; }
 
 /* ---------------------------------------------------------------- board */
 .kanban { display: flex; gap: 10px; padding: 12px 18px 18px; height: 100%; align-items: flex-start; min-width: min-content; }
@@ -249,6 +271,8 @@ svg { display: block; flex: none; }
   .row { padding: 0 10px; gap: 8px; }
   .ghead { padding: 0 10px 0 6px; }
   .ident, .rmeta .cust, .rmeta .typ { display: none; }
+  .gt-head, .gt-row { grid-template-columns: minmax(0, 1fr) 70px 64px; padding: 0 10px; }
+  .gt-types, .gt-msgs, .gt-head .c-types, .gt-head .c-msgs { display: none; }
   .kanban { padding: 10px; }
   .kcol { width: 82vw; }
   .peek { top: 0; right: 0; bottom: 0; width: 100vw; border-radius: 0; }
@@ -271,7 +295,7 @@ svg { display: block; flex: none; }
       <div class="nav-sec">客户群</div>
       <nav id="nav-groups"></nav>
     </div>
-    <div class="side-foot"><span class="sync" id="sync"></span></div>
+    <div class="side-foot"><span class="sync" id="sync"></span><span class="sync" id="pipeline"></span></div>
   </aside>
 
   <div class="main">
@@ -373,6 +397,7 @@ svg { display: block; flex: none; }
   function recompute() {
     ALL = D.events.map(e => Object.assign({}, e, edits[e.event_id] || {}));
     BY_ID = Object.fromEntries(ALL.map(e => [e.event_id, e]));
+    buildGroups();
   }
   const orig = id => D.events.find(e => e.event_id === id);
   const ident = e => "AS-" + e.event_id.replace(/^evt_/, "").slice(0, 4).toUpperCase();
@@ -383,12 +408,31 @@ svg { display: block; flex: none; }
     ALL.forEach(e => { if (e.owner) n[e.owner] = (n[e.owner] || 0) + 1; });
     return Object.keys(n).sort((a, b) => n[b] - n[a] || a.localeCompare(b, "zh"));
   }
-  function groupList() {
+  const cleanName = n => String(n || "").replace(/\s*<[^<>]*>\s*$/, "").replace(/[\s\-_]+$/, "") || n || "";
+  // 每个群：消息概况（来自原始数据）+ 事件概况（来自事件）
+  let GROUPS = [], GBY = {};
+  function buildGroups() {
     const g = {};
-    ALL.forEach(e => { (g[e.group_number] = g[e.group_number] || { id: e.group_number, name: e.group_name, uid: e.customer_uid, n: 0 }).n++; });
-    return Object.values(g).sort((a, b) => b.n - a.n || a.name.localeCompare(b.name, "zh"));
+    (D.groups || []).forEach(x => { g[x.id] = Object.assign({}, x, { events: [] }); });
+    ALL.forEach(e => {
+      const x = g[e.group_number] || (g[e.group_number] = { id: e.group_number, name: cleanName(e.group_name), raw_name: e.group_name, uid: e.customer_uid, messages: null, last: e.end_time, events: [] });
+      x.events.push(e);
+    });
+    GROUPS = Object.values(g).map(x => {
+      const open = x.events.filter(e => OPEN.has(e.status));
+      const types = {};
+      open.forEach(e => { types[e.type] = (types[e.type] || 0) + 1; });
+      const lastEvent = x.events.reduce((m, e) => (e.end_time > m ? e.end_time : m), "");
+      return Object.assign(x, { open: open.length, total: x.events.length, top: open.reduce((m, e) => Math.min(m, LV[e.level]), 9), types,
+        last: [x.last, lastEvent].filter(Boolean).sort().pop() || "", stale: open.filter(isStale).length });
+    });
+    GBY = Object.fromEntries(GROUPS.map(x => [x.id, x]));
   }
-  const groupLabel = id => { const g = groupList().find(x => x.id === id); return g ? (g.uid ? `${g.uid}` : g.name) : id; };
+  const byAttention = (a, b) => a.top - b.top || b.open - a.open || (b.last > a.last ? 1 : -1);
+  const groupList = () => GROUPS.slice().sort((a, b) => b.total - a.total || byAttention(a, b));
+  const groupLabel = id => { const g = GBY[id]; return g ? (g.uid ? `${g.name} · ${g.uid}` : g.name) : id; };
+  const gname = e => cleanName(e.group_name);
+  const gav = (id, name, size) => `<span class="gav" style="--h:${hue(id)}${size ? `;width:${size}px;height:${size}px;font-size:${Math.round(size / 2)}px;border-radius:4px` : ""}">${esc(Array.from(cleanName(name) || "?").find(c => /[\p{L}\p{N}]/u.test(c)) || "#")}</span>`;
 
   const p2 = n => String(n).padStart(2, "0");
   function fmtDate(iso) { const d = new Date(iso); return isNaN(d) ? "" : `${d.getMonth() + 1}月${d.getDate()}日`; }
@@ -417,12 +461,12 @@ svg { display: block; flex: none; }
     level: { label: "优先级", values: () => D.levels, get: e => e.level, icon: v => priIcon(v), text: v => LEVEL_NAME[v] || v, hint: v => v },
     type: { label: "类型", values: () => D.types.map(t => t.name), get: e => e.type, icon: v => dot(v), text: v => v, hint: v => PUSH()[v] ? "→ " + PUSH()[v] : "" },
     owner: { label: "跟进人", values: () => ownerList().concat([NONE]), get: e => e.owner || NONE, icon: v => avatar(v === NONE ? null : v), text: v => v },
-    group: { label: "客户群", values: () => groupList().map(g => g.id), get: e => e.group_number, icon: () => `<span class="muted">${I.users}</span>`, text: groupLabel },
+    group: { label: "客户群", values: () => groupList().filter(g => g.total).map(g => g.id), get: e => e.group_number, icon: v => gav(v, (GBY[v] || {}).name || v, 16), text: groupLabel },
   };
   const GROUPINGS = [["status", "状态"], ["type", "类型"], ["level", "优先级"], ["owner", "跟进人"], ["none", "不分组"]];
   const SORTS = [["priority", "优先级"], ["updated", "最近消息"], ["created", "首次出现"], ["confidence", "置信度"]];
 
-  const ui = Object.assign({ view: "all", layout: "list", group: "status", sort: "priority", q: "", f: {}, collapsed: [], showEmpty: false },
+  const ui = Object.assign({ page: "events", view: "all", layout: "list", group: "status", sort: "priority", q: "", f: {}, collapsed: [], showEmpty: false, gfilter: "all", gsort: "attention" },
     store.get("aes-board:ui2", {}));
   if (!VIEWS.some(v => v.key === ui.view)) ui.view = "all";
   let cursor = null, current = null, order = [];
@@ -464,8 +508,7 @@ svg { display: block; flex: none; }
     recompute();
     renderSidebar();
     renderTop();
-    renderFilterbar();
-    renderContent();
+    if (ui.page === "groups") { renderGroupsBar(); renderGroups(); } else { renderFilterbar(); renderContent(); }
     if (current) renderPeek();
     saveUi();
   }
@@ -478,23 +521,49 @@ svg { display: block; flex: none; }
     const onlyFilter = k => Object.keys(ui.f).filter(x => ui.f[x] && ui.f[x].length).join() === k && ui.f[k].length === 1 ? ui.f[k][0] : null;
     const onlyType = onlyFilter("type"), onlyGroup = onlyFilter("group");
     const noFilter = !Object.values(ui.f).some(v => v && v.length);
-    $("#nav-views").innerHTML = VIEWS.map(v => navItem(`data-view="${v.key}"`, v.icon, v.label, ALL.filter(v.test).length, ui.view === v.key && noFilter)).join("");
+    const ev = ui.page === "events";
+    $("#nav-views").innerHTML = VIEWS.map(v => navItem(`data-view="${v.key}"`, v.icon, v.label, ALL.filter(v.test).length, ev && ui.view === v.key && noFilter)).join("");
     $("#nav-types").innerHTML = D.types.map(t => navItem(`data-type="${esc(t.name)}" title="${esc(t.push_to ? "推送：" + t.push_to : "")}"`, dot(t.name), t.name,
-      ALL.filter(e => e.type === t.name && OPEN.has(e.status)).length || "", onlyType === t.name)).join("");
-    const gl = groupList();
-    $("#nav-groups").innerHTML = gl.slice(0, 12).map(g => navItem(`data-group="${esc(g.id)}" title="${esc(g.name)}"`, `<span class="av" style="--h:${hue(g.id)};width:16px;height:16px;font-size:9px;border-radius:4px">${esc(Array.from(g.uid || g.name)[0])}</span>`,
-      g.uid ? `${g.uid} · ${g.name.replace(/[-<].*$/, "")}` : g.name, g.n, onlyGroup === g.id)).join("") || `<div class="nav-item muted" style="cursor:default">暂无</div>`;
+      ALL.filter(e => e.type === t.name && OPEN.has(e.status)).length || "", ev && onlyType === t.name)).join("");
+    // 侧边栏只列最需要关注的群：有未关闭事件的优先，按最高优先级、未关闭数排序
+    const focus = GROUPS.filter(g => g.open).sort(byAttention).slice(0, 8);
+    $("#nav-groups").innerHTML = navItem(`data-page="groups"`, I.users, "全部客户群", GROUPS.length, ui.page === "groups") +
+      focus.map(g => navItem(`data-group="${esc(g.id)}" title="${esc(g.raw_name || g.name)}"`, gav(g.id, g.name, 16), g.name, g.open, ev && onlyGroup === g.id)).join("");
+    renderPipeline();
     const times = D.events.map(e => e.end_time).sort();
     $("#sync").innerHTML = API
       ? `<span class="dotlive" id="live"></span><span>已同步 · ${esc(fmtFull(D.generated_at).slice(5))}</span>`
       : `<span class="dotlive off"></span><span title="修改只保存在当前浏览器">本地模式${times.length ? " · 数据截至 " + esc(fmtFull(times[times.length - 1]).slice(5)) : ""}</span>`;
   }
 
+  function renderPipeline() {
+    const sy = D.sync, el = $("#pipeline");
+    if (!sy || !sy.finished_at) { el.innerHTML = ""; return; }
+    const tip = [`上次处理：${fmtFull(sy.finished_at)}（耗时 ${sy.duration_seconds}s）`, `日期：${(sy.dates || []).join("、")}`,
+      `窗口 ${sy.windows}：新处理 ${sy.extracted}，复用缓存 ${sy.cached}${sy.failed ? `，失败 ${sy.failed}` : ""}${sy.deferred ? `，延后 ${sy.deferred}` : ""}`,
+      `事件 ${sy.events}（${sy.groups_with_events} 个群）`, ...(sy.errors || [])].join("\n");
+    const late = staleH(sy.finished_at) > 2;
+    const bad = !sy.ok || late;
+    el.innerHTML = `<span class="dotlive${bad ? " warn" : ""}"></span><span title="${esc(tip)}">${bad ? (late ? "数据超过 2 小时未更新" : "上次处理有错误") : "数据处理于 " + esc(ago(sy.finished_at))}${sy.extracted ? ` · 新增 ${sy.extracted} 段对话` : ""}</span>`;
+  }
+
   function renderTop() {
+    if (ui.page === "groups") {
+      $("#view-icon").innerHTML = `<span class="muted">${I.users}</span>`;
+      $("#view-name").textContent = "客户群";
+      $("#view-count").textContent = GROUPS.length;
+      $("#layout-seg").style.display = "none";
+      $("#btn-display").style.display = "none";
+      setPlaceholder();
+      return;
+    }
+    $("#layout-seg").style.display = "";
+    $("#btn-display").style.display = "";
     const view = VIEWS.find(v => v.key === ui.view);
     $("#view-icon").innerHTML = `<span class="muted">${view.icon}</span>`;
     $("#view-name").textContent = view.label;
     $("#view-count").textContent = filtered().length;
+    setPlaceholder();
     $("#layout-seg").innerHTML = [["list", "列表", I.list], ["board", "看板", I.board]].map(([k, l, ic]) =>
       `<button data-layout="${k}" aria-pressed="${ui.layout === k}" title="${l}（Ctrl+B 切换）" aria-label="${l}">${ic}</button>`).join("");
   }
@@ -514,6 +583,37 @@ svg { display: block; flex: none; }
       `<span class="stats"><span>未关闭 <b>${open.length}</b></span><span class="${urgent ? "hot" : ""}">紧急/高 <b>${urgent}</b></span><span class="${stale ? "hot" : ""}">超 24h 无动态 <b>${stale}</b></span><span>客户 <b>${new Set(list.map(e => e.group_number)).size}</b></span></span>`;
   }
 
+  const GFILTERS = [["all", "全部", () => true], ["open", "有未关闭事件", g => g.open > 0], ["active", "最近 24h 有消息", g => g.recent_24h > 0 || staleH(g.last) < 24], ["quiet", "无事件", g => !g.total]];
+  const GSORTS = [["attention", "需关注优先", byAttention], ["recent", "最近消息", (a, b) => (b.last > a.last ? 1 : -1)], ["messages", "消息数", (a, b) => (b.messages || 0) - (a.messages || 0)], ["events", "事件数", (a, b) => b.total - a.total || byAttention(a, b)]];
+  function groupsFiltered() {
+    const f = (GFILTERS.find(x => x[0] === ui.gfilter) || GFILTERS[0])[2];
+    const words = ui.q.toLowerCase().split(/\s+/).filter(Boolean);
+    const srt = (GSORTS.find(x => x[0] === ui.gsort) || GSORTS[0])[2];
+    return GROUPS.filter(g => f(g) && (!words.length || words.every(w => [g.name, g.raw_name, g.uid, g.id].join(" ").toLowerCase().includes(w)))).sort(srt);
+  }
+  function renderGroupsBar() {
+    const n = k => GROUPS.filter((GFILTERS.find(x => x[0] === k) || GFILTERS[0])[2]).length;
+    const msgs = GROUPS.reduce((s, g) => s + (g.messages || 0), 0);
+    $("#filterbar").innerHTML = `<span class="gseg" id="gfilter">${GFILTERS.map(([k, l]) => `<button data-gf="${k}" aria-pressed="${ui.gfilter === k}">${l} <span class="muted">${n(k)}</span></button>`).join("")}</span>
+      <select class="gsort" id="gsort" aria-label="排序">${GSORTS.map(([k, l]) => `<option value="${k}"${ui.gsort === k ? " selected" : ""}>按${l}</option>`).join("")}</select>
+      <span class="stats"><span>群 <b>${GROUPS.length}</b></span><span>消息 <b>${msgs}</b></span><span>有未关闭事件 <b>${n("open")}</b></span></span>`;
+  }
+  function renderGroups() {
+    order = [];
+    const list = groupsFiltered();
+    if (!GROUPS.length) { $("#content").innerHTML = `<div class="empty"><div class="muted">${I.users}</div><h3>还没有群数据</h3><p>运行 <code>aes sync</code> 拉取聊天记录后，这里会列出每个群的情况。</p></div>`; return; }
+    if (!list.length) { $("#content").innerHTML = `<div class="empty"><div class="muted">${I.search}</div><h3>没有符合条件的群</h3></div>`; return; }
+    const tn = Object.fromEntries(D.types.map(t => [t.name, t]));
+    $("#content").innerHTML = `<div class="gt-head"><span>客户群</span><span>未关闭 / 全部事件</span><span class="c-types">未关闭事件类型</span><span class="c-msgs">消息（24h）</span><span>最近消息</span></div>` +
+      list.map(g => `<div class="gt-row" data-gid="${esc(g.id)}" title="${esc(g.raw_name || g.name)}">
+        <span class="gt-name">${gav(g.id, g.name)}<span class="t">${esc(g.name)}</span>${g.uid ? `<span class="muted">${esc(g.uid)}</span>` : ""}</span>
+        <span class="gt-open">${g.open ? priIcon(D.levels[g.top]) : `<span style="width:14px"></span>`}<b>${g.open || "–"}</b><span class="muted">/ ${g.total}</span>${g.stale ? `<span class="date stale" style="width:auto" title="${g.stale} 个事件超过 24 小时无动态">${I.clock}</span>` : ""}</span>
+        <span class="gt-types">${Object.entries(g.types).sort((a, b) => b[1] - a[1]).map(([t, c]) => `<span title="${esc(t)}${tn[t] && tn[t].push_to ? " → " + esc(tn[t].push_to) : ""}">${dot(t)}${esc(t)} ${c}</span>`).join("") || `<span class="muted">–</span>`}</span>
+        <span class="gt-msgs" title="${g.messages == null ? "" : `内部 ${g.inner} · 客户 ${g.customer} · ${g.senders} 人发言${g.images ? ` · 图片 ${g.images}` : ""}`}">${g.messages == null ? "–" : `${g.messages}<span class="muted">（${g.recent_24h}）</span>`}</span>
+        <span class="gt-last${staleH(g.last) < 2 ? " hot" : ""}" title="${esc(fmtFull(g.last))}">${esc(g.last ? ago(g.last) : "–")}</span>
+      </div>`).join("");
+  }
+
   function row(e) {
     const st = isStale(e);
     return `<div class="row${cursor === e.event_id ? " cur" : ""}" data-id="${esc(e.event_id)}" tabindex="-1">
@@ -523,7 +623,7 @@ svg { display: block; flex: none; }
       <span class="rtitle">${esc(e.title)}${edits[e.event_id] ? '<span class="mod" title="已人工修改"></span>' : ""}</span>
       <span class="rmeta">
         ${ui.group !== "type" ? `<span class="lbl typ">${dot(e.type)}<span class="t">${esc(e.type)}</span></span>` : ""}
-        <span class="lbl plain cust" title="${esc(e.group_name)}"><span class="t">${esc(e.customer_uid || e.group_name)}</span></span>
+        <span class="lbl plain cust" title="${esc(e.group_name)}"><span class="t">${esc(gname(e))}</span></span>
         <span class="date${st ? " stale" : ""}" title="${st ? "超过 24 小时无新消息 · " : ""}最近消息 ${esc(fmtFull(e.end_time))}">${esc(st ? ago(e.end_time) : fmtDate(e.end_time))}</span>
         <button class="ib" data-act="owner" title="跟进人：${esc(e.owner || NONE)}（A）">${avatar(e.owner)}</button>
       </span></div>`;
@@ -535,7 +635,7 @@ svg { display: block; flex: none; }
       <div class="k2">${ui.group !== "status" ? `<button class="ib" data-act="status" style="width:16px;height:16px" title="状态：${esc(e.status)}">${statusIcon(e.status)}</button>` : ""}<span>${esc(e.title)}</span></div>
       <div class="k3"><button class="ib" data-act="level" title="优先级：${esc(LEVEL_NAME[e.level])}">${priIcon(e.level)}</button>
         ${ui.group !== "type" ? `<span class="lbl">${dot(e.type)}<span class="t">${esc(e.type)}</span></span>` : ""}
-        <span class="lbl plain" title="${esc(e.group_name)}"><span class="t">${esc(e.customer_uid || e.group_name)}</span></span>
+        <span class="lbl plain" title="${esc(e.group_name)}"><span class="t">${esc(gname(e))}</span></span>
         <span class="date${isStale(e) ? " stale" : ""}" style="margin-left:auto;width:auto">${esc(isStale(e) ? ago(e.end_time) : fmtDate(e.end_time))}</span></div>
     </div>`;
   }
@@ -623,8 +723,8 @@ svg { display: block; flex: none; }
           ${edits[current] ? `<div class="prop"><span></span><button class="btn ghost" id="peek-revert" style="justify-content:flex-start;color:var(--muted)">恢复为模型原始值</button></div>` : ""}
           <div class="pdiv"></div>
           <div class="prop"><span>推送</span><span class="pval">${esc(PUSH()[e.type] || "-")}</span></div>
-          <div class="prop"><span>客户 UID</span><span class="pval">${esc(e.customer_uid || "-")}</span></div>
-          <div class="prop"><span>群</span><span class="pval">${esc(e.group_name)}</span></div>
+          <div class="prop" style="align-items:start"><span>客户群</span><span class="pval">${esc(gname(e))}${(() => { const g = GBY[e.group_number]; return g ? `<br><span class="muted" style="font-size:12px">${g.messages != null ? `${g.messages} 条消息 · ` : ""}未关闭事件 ${g.open} / ${g.total}</span><br><button class="btn ghost" data-jump-group="${esc(e.group_number)}" style="padding:0;height:22px;color:var(--accent)">查看该群全部事件</button>` : ""; })()}</span></div>
+          ${e.customer_uid ? `<div class="prop"><span>客户 UID</span><span class="pval">${esc(e.customer_uid)}</span></div>` : ""}
           <div class="prop"><span>首次消息</span><span class="pval">${esc(fmtFull(e.start_time))}</span></div>
           <div class="prop"><span>最近消息</span><span class="pval${isStale(e) ? "" : ""}" style="${isStale(e) ? "color:var(--warn)" : ""}">${esc(fmtFull(e.end_time))}${isStale(e) ? `<br><span style="font-size:12px">${esc(ago(e.end_time))}，超过 24 小时</span>` : ""}</span></div>
           <div class="prop"><span>置信度</span><span class="pval conf"><i><b style="width:${conf}%"></b></i>${e.confidence.toFixed(2)}</span></div>
@@ -866,9 +966,10 @@ svg { display: block; flex: none; }
   $("#sidebar").addEventListener("click", ev => {
     const b = ev.target.closest(".nav-item");
     if (!b) return;
-    if (b.dataset.view) { ui.view = b.dataset.view; ui.f = {}; }
-    else if (b.dataset.type) { const on = (ui.f.type || []).length === 1 && ui.f.type[0] === b.dataset.type; ui.f = on ? {} : { type: [b.dataset.type] }; }
-    else if (b.dataset.group) { const on = (ui.f.group || []).length === 1 && ui.f.group[0] === b.dataset.group; ui.f = on ? {} : { group: [b.dataset.group] }; }
+    if (b.dataset.page) { ui.page = b.dataset.page; ui.q = ""; $("#q").value = ""; }
+    else if (b.dataset.view) { ui.page = "events"; ui.view = b.dataset.view; ui.f = {}; }
+    else if (b.dataset.type) { const on = ui.page === "events" && (ui.f.type || []).length === 1 && ui.f.type[0] === b.dataset.type; ui.page = "events"; ui.f = on ? {} : { type: [b.dataset.type] }; }
+    else if (b.dataset.group) { const on = ui.page === "events" && (ui.f.group || []).length === 1 && ui.f.group[0] === b.dataset.group; ui.page = "events"; ui.view = "all"; ui.f = on ? {} : { group: [b.dataset.group] }; }
     else return;
     cursor = null;
     $("#sidebar").classList.remove("on");
@@ -879,9 +980,13 @@ svg { display: block; flex: none; }
   $("#layout-seg").addEventListener("click", ev => { const b = ev.target.closest("[data-layout]"); if (b) { ui.layout = b.dataset.layout; render(); } });
   $("#btn-display").addEventListener("click", ev => { if (pop.open && pop.anchor === ev.currentTarget) return closeMenu(); displayPanel(ev.currentTarget); });
   $("#q").addEventListener("input", ev => { ui.q = ev.target.value.trim(); render(); });
+  const setPlaceholder = () => { $("#q").placeholder = ui.page === "groups" ? "搜索客户群" : "搜索事件"; };
   $("#q").addEventListener("keydown", ev => { if (ev.key === "Escape") { ev.target.value = ""; ui.q = ""; ev.target.blur(); render(); } if (ev.key === "Enter" || ev.key === "ArrowDown") { ev.preventDefault(); ev.target.blur(); move(1); } });
+  $("#filterbar").addEventListener("change", ev => { if (ev.target.id === "gsort") { ui.gsort = ev.target.value; render(); } });
   $("#filterbar").addEventListener("click", ev => {
     const t = ev.target;
+    const gf = t.closest("[data-gf]");
+    if (gf) { ui.gfilter = gf.dataset.gf; return render(); }
     if (t.closest("#btn-filter")) return filterMenu(t.closest("#btn-filter"));
     if (t.closest("#btn-clear")) { ui.f = {}; return render(); }
     const c = t.closest("[data-clear-filter]");
@@ -892,6 +997,8 @@ svg { display: block; flex: none; }
 
   const content = $("#content");
   content.addEventListener("click", ev => {
+    const gr = ev.target.closest("[data-gid]");
+    if (gr) { ui.page = "events"; ui.view = "all"; ui.f = { group: [gr.dataset.gid] }; ui.q = ""; $("#q").value = ""; render(); content.scrollTop = 0; return; }
     if (ev.target.closest("#btn-reset-filters")) { ui.f = {}; ui.q = ""; ui.view = "all"; $("#q").value = ""; return render(); }
     const gh = ev.target.closest(".ghead");
     if (gh) {
@@ -942,6 +1049,8 @@ svg { display: block; flex: none; }
   $("#peek").addEventListener("click", ev => {
     if (ev.target.closest("#peek-close")) return closePeek();
     if (ev.target.closest("#peek-revert")) return revert(current);
+    const jg = ev.target.closest("[data-jump-group]");
+    if (jg) { ui.page = "events"; ui.view = "all"; ui.f = { group: [jg.dataset.jumpGroup] }; closePeek(); return render(); }
     const n = ev.target.closest("[data-nav]");
     if (n) return move(+n.dataset.nav);
     const act = ev.target.closest("[data-act]");
@@ -970,6 +1079,7 @@ svg { display: block; flex: none; }
     const k = ev.key;
     if (k === "/") { ev.preventDefault(); return $("#q").focus(); }
     if (k === "Escape") { if (current) closePeek(); else { cursor = null; markCursor(); } return; }
+    if (ui.page === "groups" && !current) return;
     if (k === "j" || k === "ArrowDown") { ev.preventDefault(); return move(1); }
     if (k === "k" || k === "ArrowUp") { ev.preventDefault(); return move(-1); }
     if (k === "Enter" && cursor && !current && !ev.target.closest("button")) { ev.preventDefault(); return openPeek(cursor); }

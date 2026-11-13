@@ -47,6 +47,23 @@ llm:
     # 开启 JSON 模式；网关不支持时会自动关闭重试
     json_mode: true
 
+privacy:
+  # 送给模型前把人名（群成员昵称、@提及）换成「员工A / 客户B」等代号，结果再换回真名
+  pseudonymize_names: true
+  # 群名里通常有客户公司名，送给模型时换成「客户群 <UID>」
+  mask_group_names: true
+
+sync:
+  # aes sync 每次处理最近几天（今天 + 昨天，覆盖跨零点和晚到的消息）
+  days: 2
+  # 结果、原始文件和窗口缓存保留天数
+  keep_days: 30
+  # 单次最多调用模型的窗口数，超出部分留到下次（优先处理最近的对话）
+  max_windows_per_run: 500
+  cache_dir: data/windows
+  out_file: out/live/events.jsonl
+  status_file: data/sync_status.json
+
 merge:
   # 同群、同类型事件在该小时数内且标题相似则合并
   window_hours: 72

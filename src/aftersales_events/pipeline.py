@@ -14,6 +14,7 @@ from .extract import Extractor, dump_extraction, to_events
 from .merge import merge_events
 from .models import Event, Message, RawResponse, Window
 from .preprocess import preprocess
+from .privacy import build_directory, wrap
 from .segment import segment
 
 log = logging.getLogger(__name__)
@@ -28,6 +29,8 @@ class RunResult:
 
 def run(raw: RawResponse, settings: Settings, extractor: Extractor, out_dir: str | Path | None = None) -> RunResult:
     types = settings.enabled_types
+    # 送给模型前把人名换成代号，结果再换回真名（privacy.pseudonymize_names）
+    extractor = wrap(extractor, build_directory(raw), settings.section("privacy"))
     messages, pstats = preprocess(raw, types, settings.section("preprocess"))
     windows = segment(messages, settings.section("segment"))
     log.info("预处理：%s；窗口数：%d", pstats, len(windows))

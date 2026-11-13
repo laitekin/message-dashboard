@@ -101,12 +101,13 @@ class BoardState:
 
 class BoardApp:
     def __init__(self, settings: Settings, out_dir: str | Path, raw_dir: str | Path | None, state_path: str | Path,
-                 title: str = "售后事件看板"):
+                 title: str = "售后事件看板", sync_status: str | Path | None = None):
         self.settings = settings
         self.out_dir = Path(out_dir)
         self.raw_dir = Path(raw_dir) if raw_dir else None
         self.state = BoardState(state_path)
         self.title = title
+        self.sync_status = Path(sync_status) if sync_status else None
         self._msg_lock = threading.Lock()
         self._msg_key: tuple = ()
         self._msgs: list[Message] = []
@@ -133,10 +134,18 @@ class BoardApp:
                 self._msgs, self._msg_key = msgs, key
             return self._msgs
 
+    def sync_info(self) -> dict | None:
+        if not (self.sync_status and self.sync_status.exists()):
+            return None
+        try:
+            return json.loads(self.sync_status.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+
     def payload(self, user: str | None = None) -> dict:
         st = self.state.snapshot()
         return build_payload(self.events(), self.settings.enabled_types, self.messages(), self.title,
-                             edits=st["edits"], history=st["history"], api=True, user=user)
+                             edits=st["edits"], history=st["history"], api=True, user=user, sync=self.sync_info())
 
     def validate(self, patch: object, events: list[Event]) -> dict:
         if not isinstance(patch, dict) or not patch:
