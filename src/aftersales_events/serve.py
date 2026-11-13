@@ -6,9 +6,12 @@
     POST /api/events/<id>/revert    恢复为模型原始输出
     GET  /api/settings              模型设置（当前使用、已选择、可用模型、修改记录）
     POST /api/settings              {"model": "..."} 选择抽取模型，下一次 aes sync 生效；null 恢复默认
-    GET  /api/groups/<群号>/messages?date=YYYY-MM-DD
+    GET  /api/groups/<群号>/messages?date=YYYY-MM-DD[&uid=<UID>]
                                     某个群某天的全部聊天记录：通过取数中转（aes relay）实时请求数据源，
-                                    只在内存里短暂缓存，不落盘；未配置中转时退回读取已保存的原始文件
+                                    只在内存里短暂缓存，不落盘；未配置中转时退回读取已保存的原始文件。
+                                    带 UID 的客户群不在 uid=0 的结果里，需要传 uid 才能取到
+    GET  /api/uids/<UID>?days=7     按用户 UID 查询关联的群（内部群、客户群等）：最近 N 天（最多 31）
+                                    有消息的群、各群消息概况，以及看板里该 UID 的事件
     GET  /healthz
 
 人工修改单独保存在 state 文件（JSON）里，不改动 events.jsonl，并记录谁在什么时候改了什么。
@@ -33,17 +36,20 @@ import urllib.request
 from datetime import date
 from urllib.parse import parse_qs, unquote, urlencode, urlsplit
 
-from .board import LEVELS, STATUSES, build_payload, find_event_files, load_events, render_html
+from .board import LEVELS, STATUSES, build_payload, clean_group_name, find_event_files, load_events, render_html
 from .config import MODEL_RE, Settings, load_runtime
 from .fetch import load_raw
 from .models import Event, Message
-from .preprocess import RE_IMAGE_URL, mask, preprocess
+from .preprocess import RE_IMAGE_URL, mask, parse_customer_uid, preprocess
 
 log = logging.getLogger(__name__)
 
 EDITABLE = ("status", "level", "type", "owner")
 MAX_BODY = 64 * 1024
 MAX_HISTORY = 100
+RE_LOOKUP_UID = re.compile(r"^\d{5,20}$")
+RE_INTERNAL_GROUP = re.compile(r"^\s*[「\[【(（]?\s*内部")
+MAX_LOOKUP_DAYS = 31
 
 
 class BoardState:
@@ -160,21 +166,39 @@ class BoardApp:
     # ------------------------------------------------------------ 聊天记录（实时）
     LIVE_TTL_TODAY = 120
     LIVE_TTL_PAST = 1800
-    LIVE_CACHE_DAYS = 14  # 往上翻会连续加载多天
+    LIVE_CACHE_ENTRIES = 24  # 往上翻会连续加载多天；另外留几条给按 UID 查询
 
-    def _day_raw(self, d: str, fresh: bool = False) -> tuple[dict, str, str]:
-        """返回 (原始 JSON, 来源 live/stored, 获取时间)。"""
+    def _stored_raw(self, uid: str, start: str, end: str) -> tuple[list[dict], str]:
+        """未配置实时取数时，从已保存的原始文件里找（文件名为 <uid>_<start>_<end>.json）。"""
+        files = sorted(self.raw_dir.glob("*_*_*.json")) if self.raw_dir and self.raw_dir.exists() else []
+        hits = []
+        for f in files:
+            parts = f.stem.rsplit("_", 2)
+            if len(parts) == 3 and parts[1] <= end and parts[2] >= start and (uid == "0" or parts[0] in ("0", uid)):
+                hits.append(f)
+        if not hits:
+            raise LookupError(f"没有 {start}{'' if start == end else ' ~ ' + end} 的数据（未配置实时取数）")
+        groups = []
+        for f in hits:
+            for g in json.loads(f.read_text(encoding="utf-8")).get("groups") or []:
+                # 按 UID 查时，「全部群」文件里只取群名带这个 UID 的群
+                if uid == "0" or f.stem.startswith(uid + "_") or parse_customer_uid(g.get("group_name") or "") == uid:
+                    groups.append(g)
+        fetched = datetime.fromtimestamp(max(f.stat().st_mtime for f in hits)).isoformat(timespec="seconds")
+        return groups, fetched
+
+    def _raw(self, uid: str, start: str, end: str, fresh: bool = False) -> tuple[list[dict], str, str]:
+        """返回 (群列表, 来源 live/stored, 获取时间)。"""
         if not self.relay_url:
-            files = sorted(self.raw_dir.glob(f"*_{d}_{d}.json")) if self.raw_dir and self.raw_dir.exists() else []
-            if not files:
-                raise LookupError(f"没有 {d} 的数据（未配置实时取数）")
-            return json.loads(files[-1].read_text(encoding="utf-8")), "stored", datetime.fromtimestamp(files[-1].stat().st_mtime).isoformat(timespec="seconds")
-        ttl = self.LIVE_TTL_TODAY if d >= date.today().isoformat() else self.LIVE_TTL_PAST
+            groups, fetched = self._stored_raw(uid, start, end)
+            return groups, "stored", fetched
+        key = f"{uid}|{start}|{end}"
+        ttl = self.LIVE_TTL_TODAY if end >= date.today().isoformat() else self.LIVE_TTL_PAST
         with self._live_lock:
-            hit = self._live.get(d)
+            hit = self._live.get(key)
             if hit and not fresh and time.monotonic() - hit[0] < ttl:
-                return hit[1], "live", hit[2]
-        url = f"{self.relay_url}/chat?{urlencode({'uid': '0', 'date': d})}"
+                return hit[1].get("groups") or [], "live", hit[2]
+        url = f"{self.relay_url}/chat?{urlencode({'uid': uid, 'start': start, 'end': end})}"
         try:
             with urllib.request.urlopen(url, timeout=100) as resp:
                 data = json.loads(resp.read())
@@ -188,24 +212,32 @@ class BoardApp:
             raise RuntimeError(f"取数服务不可用：{e}") from e
         fetched = datetime.now().isoformat(timespec="seconds")
         with self._live_lock:
-            self._live[d] = (time.monotonic(), data, fetched)
-            for old in sorted(self._live, key=lambda k: self._live[k][0])[:-self.LIVE_CACHE_DAYS]:
+            self._live[key] = (time.monotonic(), data, fetched)
+            for old in sorted(self._live, key=lambda k: self._live[k][0])[:-self.LIVE_CACHE_ENTRIES]:
                 self._live.pop(old, None)
-        return data, "live", fetched
+        return data.get("groups") or [], "live", fetched
 
-    def group_messages(self, gid: str, d: str, fresh: bool = False) -> dict:
-        data, source, fetched = self._day_raw(d, fresh)
-        group = next((g for g in data.get("groups") or [] if g.get("group_number") == gid), None)
-        msgs, seen = [], set()
+    @staticmethod
+    def _records(group: dict | None) -> list[dict]:
+        """按时间排序并按 id 去重（按范围查询时同一条消息可能出现多次）。"""
+        out, seen = [], set()
         for r in sorted((group or {}).get("records") or [], key=lambda r: (r.get("send_time") or r.get("created_at") or "", str(r.get("id")))):
             rid = str(r.get("id"))
-            if rid in seen:
-                continue
-            seen.add(rid)
+            if rid not in seen:
+                seen.add(rid)
+                out.append(r)
+        return out
+
+    def group_messages(self, gid: str, d: str, fresh: bool = False, uid: str = "0") -> dict:
+        groups, source, fetched = self._raw(uid, d, d, fresh)
+        parts = [g for g in groups if g.get("group_number") == gid]
+        group = {"group_name": parts[-1].get("group_name"), "records": [r for g in parts for r in g.get("records") or []]} if parts else None
+        msgs = []
+        for r in self._records(group):
             content = (r.get("content") or "").strip()
             image = content == "[图片]" or (bool(RE_IMAGE_URL.findall(content)) and len(RE_IMAGE_URL.sub("", content).strip()) < 5)
             msgs.append({
-                "id": rid,
+                "id": str(r.get("id")),
                 "t": (r.get("send_time") or r.get("created_at") or "").replace(" ", "T"),
                 "role": "内部" if r.get("is_inner") else "客户",
                 "sender": r.get("display_name") or r.get("nick_name") or r.get("sender_number") or "",
@@ -220,6 +252,40 @@ class BoardApp:
         name = (group or {}).get("group_name") or next((e.group_name for e in self.events() if e.group_number == gid), gid)
         return {"group": {"id": gid, "name": name}, "date": d, "source": source, "fetched_at": fetched,
                 "total": len(msgs), "messages": msgs, "evidence": evidence}
+
+    def uid_lookup(self, uid: str, days: int = 7, fresh: bool = False) -> dict:
+        """按用户 UID 查询关联的群：数据源按 UID 返回该用户的内部群、客户群等（这些群不在 uid=0 的结果里）。"""
+        end = date.today()
+        start = date.fromordinal(end.toordinal() - days + 1)
+        groups, source, fetched = self._raw(uid, start.isoformat(), end.isoformat(), fresh)
+        merged: dict[str, dict] = {}
+        for g in groups:  # 按范围查询时同一个群可能按天分成多段
+            gid = g.get("group_number")
+            if gid:
+                m = merged.setdefault(gid, {"group_number": gid, "group_name": g.get("group_name") or "", "records": []})
+                m["records"].extend(g.get("records") or [])
+                m["group_name"] = g.get("group_name") or m["group_name"]
+        out = []
+        for gid, g in merged.items():
+            recs = self._records(g)
+            name = g["group_name"] or (recs[-1].get("group_name") if recs else "") or gid
+            times = [(r.get("send_time") or r.get("created_at") or "").replace(" ", "T") for r in recs]
+            times = [t for t in times if t]
+            out.append({
+                "id": gid, "name": clean_group_name(name), "raw_name": name,
+                "uid": parse_customer_uid(name) or uid,
+                "internal": bool(RE_INTERNAL_GROUP.match(name)),
+                "messages": len(recs),
+                "inner": sum(1 for r in recs if r.get("is_inner")),
+                "customer": sum(1 for r in recs if not r.get("is_inner")),
+                "senders": len({r.get("sender_number") or r.get("display_name") for r in recs}),
+                "first": min(times) if times else None, "last": max(times) if times else None,
+            })
+        out.sort(key=lambda g: (not g["internal"], g["last"] or ""), reverse=True)  # 客户群在前，再按最近消息
+        gids = {g["id"] for g in out}
+        event_ids = [e.event_id for e in self.events() if e.customer_uid == uid or e.group_number in gids]
+        return {"uid": uid, "start": start.isoformat(), "end": end.isoformat(), "days": days, "source": source,
+                "fetched_at": fetched, "groups": out, "event_ids": event_ids}
 
     def model_settings(self) -> dict:
         """模型设置：provider 和实际使用的模型以最近一次 sync 为准（看板服务本身不持有 API key）。"""
@@ -325,14 +391,34 @@ def make_handler(app: BoardApp):
                 qs = parse_qs(urlsplit(self.path).query)
                 d = (qs.get("date") or [date.today().isoformat()])[0]
                 fresh = (qs.get("fresh") or ["0"])[0] == "1"
+                uid = (qs.get("uid") or ["0"])[0] or "0"
                 try:
                     date.fromisoformat(d)
                 except ValueError:
                     return self._json(400, {"error": "date 需为 YYYY-MM-DD"})
                 if not gid or len(gid) > 100:
                     return self._json(400, {"error": "群号不正确"})
+                if uid != "0" and not RE_LOOKUP_UID.match(uid):
+                    return self._json(400, {"error": "UID 需为 5 到 20 位数字"})
                 try:
-                    self._json(200, app.group_messages(gid, d, fresh))
+                    self._json(200, app.group_messages(gid, d, fresh, uid))
+                except LookupError as e:
+                    self._json(404, {"error": str(e)})
+                except RuntimeError as e:
+                    self._json(502, {"error": str(e)})
+            elif path.startswith("/api/uids/"):
+                uid = unquote(path[len("/api/uids/"):]).strip()
+                qs = parse_qs(urlsplit(self.path).query)
+                if not RE_LOOKUP_UID.match(uid):
+                    return self._json(400, {"error": "UID 需为 5 到 20 位数字"})
+                try:
+                    days = int((qs.get("days") or ["7"])[0])
+                except ValueError:
+                    days = 0
+                if not 1 <= days <= MAX_LOOKUP_DAYS:
+                    return self._json(400, {"error": f"days 需在 1 到 {MAX_LOOKUP_DAYS} 之间"})
+                try:
+                    self._json(200, app.uid_lookup(uid, days, (qs.get("fresh") or ["0"])[0] == "1"))
                 except LookupError as e:
                     self._json(404, {"error": str(e)})
                 except RuntimeError as e:

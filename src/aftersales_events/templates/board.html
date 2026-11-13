@@ -191,6 +191,22 @@ svg { display: block; flex: none; }
 .chat-btn { opacity: 0; }
 .gt-row:hover .chat-btn, .chat-btn:focus-visible { opacity: 1; }
 
+/* ---------------------------------------------------------------- uid lookup */
+.uidq { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.uidq input { height: 26px; width: 200px; max-width: 100%; border: 1px solid var(--border-2); border-radius: 6px; background: var(--bg); color: var(--text); padding: 0 8px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.uidq input:focus { outline: none; border-color: var(--accent); }
+.uid-recent { display: inline-flex; gap: 4px; flex-wrap: wrap; align-items: center; color: var(--muted); font-size: 12px; }
+.uid-recent button { height: 22px; padding: 0 7px; border: 1px solid var(--border-2); border-radius: 999px; font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.uid-recent button:hover { border-color: var(--accent); }
+.uid-sec { padding: 14px 24px 6px; color: var(--muted); font-size: 12px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.uid-sec b { color: var(--text); font-weight: 600; font-size: 13px; }
+.gtag { font-size: 11px; padding: 0 5px; border-radius: 4px; background: var(--active); color: var(--muted); flex: none; }
+.gtag.in { background: var(--accent-soft); color: var(--accent); }
+.uid-hint { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 24px; border-bottom: 1px solid var(--border); color: var(--accent); text-align: left; }
+.uid-hint:hover { background: var(--hover); }
+.linkbtn { color: var(--accent); padding: 0; height: auto; }
+.linkbtn:hover { text-decoration: underline; }
+
 /* ---------------------------------------------------------------- settings */
 .settings { max-width: 720px; margin: 0 auto; padding: 32px 24px 60px; }
 .settings h2 { font-size: 16px; margin: 0 0 4px; font-weight: 600; }
@@ -388,6 +404,7 @@ svg { display: block; flex: none; }
     fire: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="2.5" width="11" height="11" rx="2.5"/><path d="M8 5v3.6" stroke-linecap="round"/><circle cx="8" cy="10.8" r=".6" fill="currentColor"/></svg>',
     clock: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.2l2 1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     user: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="5.8" stroke-dasharray="2 1.6"/></svg>',
+    person: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="5.6" r="2.6"/><path d="M3 13.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4" stroke-linecap="round"/></svg>',
     users: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="6" cy="6" r="2.3"/><path d="M2.5 12.5c.5-2 1.9-3 3.5-3s3 1 3.5 3" stroke-linecap="round"/><path d="M10.3 4.2a2.2 2.2 0 0 1 0 3.9M11.6 9.7c1 .4 1.6 1.3 1.9 2.8" stroke-linecap="round"/></svg>',
     search: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3" stroke-linecap="round"/></svg>',
     list: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 4h11M2.5 8h11M2.5 12h11"/></svg>',
@@ -530,13 +547,17 @@ svg { display: block; flex: none; }
   const ui = Object.assign({ page: "events", view: "all", layout: "list", group: "status", sort: "priority", q: "", f: {}, collapsed: [], showEmpty: false, gfilter: "all", gsort: "attention" },
     store.get("aes-board:ui2", {}));
   if (!VIEWS.some(v => v.key === ui.view)) ui.view = "all";
-  if (!["events", "groups", "settings"].includes(ui.page)) ui.page = "events";
+  if (!["events", "groups", "settings", "uid"].includes(ui.page)) ui.page = "events";
   let cursor = null, current = null, order = [];
   // 聊天记录：按天加载，days 从旧到新；往上翻加载更早的一天，往下翻加载更新的一天（像微信）
-  const chat = { gid: null, name: "", days: [], role: "all", focus: [], seq: 0, upBusy: false, downBusy: false,
+  const chat = { gid: null, uid: null, name: "", days: [], role: "all", focus: [], seq: 0, upBusy: false, downBusy: false,
                  upError: null, downError: null, emptyStreak: 0, exhausted: false, initError: null, atBottom: true };
   const MAX_EMPTY_DAYS = 7;
-  const saveUi = () => store.set("aes-board:ui2", Object.assign({}, ui, { q: "", page: ui.page === "chat" ? "groups" : ui.page }));
+  // 按 UID 查询：数据源按 UID 返回该用户关联的群（内部群、客户群…），这些群不在「全部群」的同步结果里
+  const uq = { uid: ui.uid || "", input: ui.uid || "", days: ui.uidDays || 7, data: null, loading: false, error: null, seq: 0 };
+  const RE_UIDQ = /^\d{5,20}$/;
+  const RE_INNER_GROUP = /^\s*[「\[【(（]?\s*内部/;
+  const saveUi = () => store.set("aes-board:ui2", Object.assign({}, ui, { q: "", page: ui.page === "chat" ? (chat.uid ? "uid" : "groups") : ui.page }));
 
   function filtered() {
     const view = VIEWS.find(v => v.key === ui.view);
@@ -578,9 +599,17 @@ svg { display: block; flex: none; }
     if (ui.page === "groups") { renderGroupsBar(); renderGroups(); }
     else if (ui.page === "settings") renderSettings();
     else if (ui.page === "chat") { renderChatBar(); renderChat(); }
+    else if (ui.page === "uid") { renderUidBar(); renderUid(); }
     else { renderFilterbar(); renderContent(); }
     if (current) renderPeek();
     saveUi();
+    syncHash();
+  }
+  // UID 页的地址带上 #uid=<UID>，可以直接分享；离开后去掉（window.history：这里的 history 变量是修改记录）
+  function syncHash() {
+    const want = ui.page === "uid" && uq.uid ? "#uid=" + uq.uid : ui.page === "chat" && chat.uid ? "#uid=" + chat.uid : "";
+    if (location.hash === want || (!want && !/^#uid=/.test(location.hash))) return;
+    try { window.history.replaceState(null, "", want || location.pathname + location.search); } catch (e) {}
   }
 
   function navItem(attrs, icon, label, n, active) {
@@ -598,6 +627,7 @@ svg { display: block; flex: none; }
     // 侧边栏只列最需要关注的群：有未关闭事件的优先，按最高优先级、未关闭数排序
     const focus = GROUPS.filter(g => g.open).sort(byAttention).slice(0, 8);
     $("#nav-groups").innerHTML = navItem(`data-page="groups"`, I.users, "全部客户群", GROUPS.length, ui.page === "groups") +
+      (API ? navItem(`data-page="uid"`, I.person, "按 UID 查询", "", ui.page === "uid" || (ui.page === "chat" && !!chat.uid)) : "") +
       focus.map(g => navItem(`data-group="${esc(g.id)}" title="${esc(g.raw_name || g.name)}"`, gav(g.id, g.name, 16), g.name, g.open, ev && onlyGroup === g.id)).join("");
     const ms = D.model_settings || {};
     $("#nav-system").innerHTML = navItem(`data-page="settings"`, I.gear, "设置", ms.selected && ms.selected !== ms.in_use ? "待生效" : "", ui.page === "settings");
@@ -620,10 +650,21 @@ svg { display: block; flex: none; }
   }
 
   function renderTop() {
+    if (ui.page === "uid") {
+      $("#view-icon").innerHTML = `<span class="muted">${I.person}</span>`;
+      $("#view-name").innerHTML = `<span>按 UID 查询</span>${uq.uid ? `<span class="muted" style="font-weight:400">· ${esc(uq.uid)}</span>` : ""}`;
+      $("#view-count").textContent = uq.data ? uq.data.groups.length : "";
+      $("#layout-seg").style.display = "none";
+      $("#btn-display").style.display = "none";
+      $(".search").style.display = "none";
+      return;
+    }
     if (ui.page === "chat") {
       const g = GBY[chat.gid];
+      const back = chat.uid ? `<button class="btn ghost" data-page-go="uid" style="padding:0 4px;height:24px;color:var(--muted)">UID ${esc(chat.uid)}</button>`
+        : `<button class="btn ghost" data-page-go="groups" style="padding:0 4px;height:24px;color:var(--muted)">客户群</button>`;
       $("#view-icon").innerHTML = `<span class="muted">${I.msg}</span>`;
-      $("#view-name").innerHTML = `<button class="btn ghost" data-page-go="groups" style="padding:0 4px;height:24px;color:var(--muted)">客户群</button>${I.chevR}<span>${esc(g ? g.name : chat.name || chat.gid)}</span><span class="muted" style="font-weight:400">· 聊天记录</span>`;
+      $("#view-name").innerHTML = `${back}${I.chevR}<span>${esc(chat.name || (g ? g.name : chat.gid))}</span><span class="muted" style="font-weight:400">· 聊天记录</span>`;
       $("#view-count").textContent = "";
       $("#layout-seg").style.display = "none";
       $("#btn-display").style.display = "none";
@@ -694,13 +735,16 @@ svg { display: block; flex: none; }
       <select class="gsort" id="gsort" aria-label="排序">${GSORTS.map(([k, l]) => `<option value="${k}"${ui.gsort === k ? " selected" : ""}>按${l}</option>`).join("")}</select>
       <span class="stats"><span>群 <b>${GROUPS.length}</b></span><span>消息 <b>${msgs}</b></span><span>有未关闭事件 <b>${n("open")}</b></span></span>`;
   }
+  // 搜索框里输入的是 UID 时，提示可以向数据源查询该 UID 关联的群
+  const uidHint = () => API && RE_UIDQ.test(ui.q) ? `<button class="uid-hint" data-uid-go="${esc(ui.q)}">${I.person}<span>查询 UID <b>${esc(ui.q)}</b> 关联的群和聊天记录</span>${I.chevR}</button>` : "";
   function renderGroups() {
     order = [];
     const list = groupsFiltered();
+    const hint = uidHint();
     if (!GROUPS.length) { $("#content").innerHTML = `<div class="empty"><div class="muted">${I.users}</div><h3>还没有群数据</h3><p>运行 <code>aes sync</code> 拉取聊天记录后，这里会列出每个群的情况。</p></div>`; return; }
-    if (!list.length) { $("#content").innerHTML = `<div class="empty"><div class="muted">${I.search}</div><h3>没有符合条件的群</h3></div>`; return; }
+    if (!list.length) { $("#content").innerHTML = hint + `<div class="empty"><div class="muted">${I.search}</div><h3>没有符合条件的群</h3>${hint ? "<p>带 UID 的客户群不在「全部群」的同步结果里，可以按 UID 向数据源查询。</p>" : ""}</div>`; return; }
     const tn = Object.fromEntries(D.types.map(t => [t.name, t]));
-    $("#content").innerHTML = `<div class="gt-head"><span>客户群</span><span>未关闭 / 全部事件</span><span class="c-types">未关闭事件类型</span><span class="c-msgs">消息（24h）</span><span>最近消息</span></div>` +
+    $("#content").innerHTML = hint + `<div class="gt-head"><span>客户群</span><span>未关闭 / 全部事件</span><span class="c-types">未关闭事件类型</span><span class="c-msgs">消息（24h）</span><span>最近消息</span></div>` +
       list.map(g => `<div class="gt-row" data-gid="${esc(g.id)}" title="${esc(g.raw_name || g.name)}">
         <span class="gt-name">${gav(g.id, g.name)}<span class="t">${esc(g.name)}</span>${g.uid ? `<span class="muted">${esc(g.uid)}</span>` : ""}${API ? `<button class="ib chat-btn" data-chat-gid="${esc(g.id)}" title="查看聊天记录" aria-label="查看聊天记录">${I.msg}</button>` : ""}</span>
         <span class="gt-open">${g.open ? priIcon(D.levels[g.top]) : `<span style="width:14px"></span>`}<b>${g.open || "–"}</b><span class="muted">/ ${g.total}</span>${g.stale ? `<span class="date stale" style="width:auto" title="${g.stale} 个事件超过 24 小时无动态">${I.clock}</span>` : ""}</span>
@@ -719,14 +763,14 @@ svg { display: block; flex: none; }
   const chatLast = () => chat.days.length ? chat.days[chat.days.length - 1].date : null;
 
   async function fetchDay(d, fresh) {
-    const r = await fetch(`api/groups/${encodeURIComponent(chat.gid)}/messages?date=${d}${fresh ? "&fresh=1" : ""}`, { cache: "no-store" });
+    const r = await fetch(`api/groups/${encodeURIComponent(chat.gid)}/messages?date=${d}${chat.uid ? "&uid=" + encodeURIComponent(chat.uid) : ""}${fresh ? "&fresh=1" : ""}`, { cache: "no-store" });
     const body = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(body.error || r.status);
     return body;
   }
-  function openChat(gid, date, focus) {
+  function openChat(gid, date, focus, uid, name) {
     const g = GBY[gid];
-    Object.assign(chat, { gid, name: g ? g.name : "", days: [], role: "all", focus: focus || [], seq: chat.seq + 1, upBusy: false, downBusy: false,
+    Object.assign(chat, { gid, uid: uid || null, name: name || (g ? g.name : ""), days: [], role: "all", focus: focus || [], seq: chat.seq + 1, upBusy: false, downBusy: false,
                           upError: null, downError: null, emptyStreak: 0, exhausted: false, initError: null, atBottom: !(focus && focus.length) });
     ui.page = "chat"; ui.q = ""; $("#q").value = "";
     if (current) closePeek();
@@ -879,6 +923,69 @@ svg { display: block; flex: none; }
       ? `<div class="cday muted" style="position:static">${chat.downBusy ? "正在加载更新的消息…" : chat.downError ? `加载失败：${esc(chat.downError)} <button class="fadd" data-chat-newer>重试</button>` : `<button class="fadd" data-chat-newer>下划加载 ${esc(dayTitle(shiftDate(chatLast(), 1)))}</button>`}</div>`
       : `<div class="cday muted" style="position:static">— 已是最新 —</div>`;
     box.innerHTML = `<div class="chat">${chatTopHtml()}${parts}${bottom}</div>`;
+  }
+
+  // ============================================================ 按 UID 查询
+  const recentUids = () => store.get("aes-board:uids", []);
+  function lookupUid(uid, days, fresh) {
+    uid = String(uid || "").trim();
+    ui.page = "uid"; ui.q = ""; $("#q").value = "";
+    uq.input = uid;
+    if (days) uq.days = days;
+    if (!RE_UIDQ.test(uid)) { uq.error = uid ? "UID 需为 5 到 20 位数字" : null; uq.data = null; uq.uid = ""; return render(); }
+    Object.assign(uq, { uid, data: null, error: null, loading: true, seq: uq.seq + 1 });
+    ui.uid = uid; ui.uidDays = uq.days;
+    store.set("aes-board:uids", [uid].concat(recentUids().filter(x => x !== uid)).slice(0, 8));
+    render();
+    if (!API) { uq.loading = false; uq.error = "单文件模式不能查询，请在服务模式（aes serve）下使用"; return render(); }
+    const seq = uq.seq;
+    fetch(`api/uids/${encodeURIComponent(uid)}?days=${uq.days}${fresh ? "&fresh=1" : ""}`, { cache: "no-store" })
+      .then(async r => { const b = await r.json().catch(() => ({})); if (!r.ok) throw new Error(b.error || r.status); return b; })
+      .then(b => { if (seq === uq.seq) { uq.data = b; uq.loading = false; if (ui.page === "uid") render(); } })
+      .catch(err => { if (seq === uq.seq) { uq.error = err.message; uq.loading = false; if (ui.page === "uid") render(); } });
+  }
+  function renderUidBar() {
+    const rec = recentUids().filter(x => x !== uq.uid);
+    $("#filterbar").innerHTML = `<form class="uidq" id="uid-form" autocomplete="off">
+        <input id="uid-input" inputmode="numeric" placeholder="输入用户 UID，如 1383603926" value="${esc(uq.input)}" aria-label="用户 UID">
+        <span class="gseg">${[[7, "近 7 天"], [31, "近 31 天"]].map(([d, l]) => `<button type="button" data-uid-days="${d}" aria-pressed="${uq.days === d}">${l}</button>`).join("")}</span>
+        <button class="btn primary" type="submit" style="height:26px">查询</button>
+        ${rec.length ? `<span class="uid-recent">最近：${rec.map(x => `<button type="button" data-uid-go="${esc(x)}">${esc(x)}</button>`).join("")}</span>` : ""}
+      </form>
+      ${uq.data ? `<span class="stats"><span>${esc(uq.data.start.slice(5))} ~ ${esc(uq.data.end.slice(5))} · ${uq.data.source === "live" ? "实时获取" : "已保存数据"} ${esc(fmtFull(uq.data.fetched_at).slice(11))}</span><button class="fadd" data-uid-refresh>刷新</button></span>` : ""}`;
+  }
+  function renderUid() {
+    order = [];
+    const box = $("#content");
+    if (!uq.uid && !uq.error) {
+      box.innerHTML = `<div class="empty"><div class="muted">${I.person}</div><h3>按用户 UID 查询关联的群</h3><p>带 UID 的客户群和对应的内部群不在「全部群」的同步结果里。输入 UID 后实时向数据源查询，列出最近有消息的群，可以直接打开聊天记录。</p></div>`;
+      return;
+    }
+    if (uq.error) { box.innerHTML = `<div class="empty"><div class="muted">${I.person}</div><h3>查询失败</h3><p>${esc(uq.error)}</p>${uq.uid ? `<button class="btn" data-uid-refresh>重试</button>` : ""}</div>`; return; }
+    if (uq.loading || !uq.data) { box.innerHTML = `<div class="empty"><div class="muted">${I.person}</div><h3>正在查询 UID ${esc(uq.uid)} 关联的群…</h3><p>实时请求数据源（近 ${uq.days} 天），不在服务器存储，通常需要几秒。</p></div>`; return; }
+    const d = uq.data;
+    // 数据源返回的群 + 看板里已知的同 UID 群（这段时间可能没有消息）
+    const rows = d.groups.slice();
+    GROUPS.filter(g => g.uid === d.uid && !rows.some(x => x.id === g.id))
+      .forEach(g => rows.push({ id: g.id, name: g.name, raw_name: g.raw_name, uid: g.uid, internal: RE_INNER_GROUP.test(g.raw_name || g.name || ""), messages: 0, inner: 0, customer: 0, senders: 0, last: g.last, known: true }));
+    const evs = d.event_ids.map(id => BY_ID[id]).filter(Boolean).sort((a, b) => LV[a.level] - LV[b.level] || (b.end_time > a.end_time ? 1 : -1));
+    order = evs.map(e => e.event_id);
+    const groupsHtml = rows.length ? `<div class="gt-head"><span>关联的群</span><span>未关闭 / 全部事件</span><span class="c-types">类型</span><span class="c-msgs">消息（近 ${d.days} 天）</span><span>最近消息</span></div>` +
+      rows.map(g => {
+        const k = GBY[g.id] || { open: 0, total: 0, top: 9 };
+        const lastDay = g.last && !g.known ? String(g.last).slice(0, 10) : todayStr();
+        return `<div class="gt-row" data-chat-gid="${esc(g.id)}" data-chat-uid="${esc(d.uid)}" data-chat-name="${esc(g.name)}" data-chat-date="${esc(lastDay)}" title="${esc(g.raw_name || g.name)} · 点击查看聊天记录">
+          <span class="gt-name">${gav(g.id, g.name)}<span class="t">${esc(g.name)}</span><span class="gtag${g.internal ? " in" : ""}">${g.internal ? "内部群" : "客户群"}</span>${g.uid && g.uid !== d.uid ? `<span class="muted">${esc(g.uid)}</span>` : ""}</span>
+          <span class="gt-open">${k.open ? priIcon(D.levels[k.top]) : `<span style="width:14px"></span>`}<b>${k.open || "–"}</b><span class="muted">/ ${k.total}</span></span>
+          <span class="gt-types muted">${g.internal ? "内部沟通" : "与客户沟通"}</span>
+          <span class="gt-msgs" title="${g.messages ? `内部 ${g.inner} · 客户 ${g.customer} · ${g.senders} 人发言` : ""}">${g.known && !g.messages ? `<span class="muted">无</span>` : g.messages}</span>
+          <span class="gt-last${g.last && staleH(g.last) < 2 ? " hot" : ""}" title="${esc(fmtFull(g.last))}">${esc(g.last ? ago(g.last) : "–")}</span>
+        </div>`;
+      }).join("")
+      : `<div class="empty" style="padding:40px 24px"><div class="muted">${I.users}</div><h3>近 ${d.days} 天没有找到关联的群</h3><p>${d.days < 31 ? `可以<button class="btn ghost linkbtn" data-uid-days="31">扩大到近 31 天</button>再查。` : "请确认 UID 是否正确。"}</p></div>`;
+    const evHtml = evs.length ? `<div class="uid-sec"><b>相关事件</b><span>${evs.length} 个 · 未关闭 ${evs.filter(e => OPEN.has(e.status)).length}</span></div>` + evs.map(row).join("")
+      : `<div class="uid-sec"><b>相关事件</b><span>看板里暂无该 UID 的事件（每小时的自动处理只覆盖「全部群」）</span></div>`;
+    box.innerHTML = `<div class="uid-sec"><b>UID ${esc(d.uid)}</b><span>近 ${d.days} 天有消息的群 ${d.groups.length} 个 · 点击一行查看聊天记录</span></div>` + groupsHtml + evHtml;
   }
 
   function nextRun() {
@@ -1046,7 +1153,7 @@ svg { display: block; flex: none; }
           <div class="pdiv"></div>
           <div class="prop"><span>推送</span><span class="pval">${esc(PUSH()[e.type] || "-")}</span></div>
           <div class="prop" style="align-items:start"><span>客户群</span><span class="pval">${esc(gname(e))}${(() => { const g = GBY[e.group_number]; return g ? `<br><span class="muted" style="font-size:12px">${g.messages != null ? `${g.messages} 条消息 · ` : ""}未关闭事件 ${g.open} / ${g.total}</span><br><button class="btn ghost" data-jump-group="${esc(e.group_number)}" style="padding:0;height:22px;color:var(--accent)">查看该群全部事件</button>${API ? `<br><button class="btn ghost" data-chat-event="${esc(e.event_id)}" style="padding:0;height:22px;color:var(--accent)">查看聊天记录</button>` : ""}` : ""; })()}</span></div>
-          ${e.customer_uid ? `<div class="prop"><span>客户 UID</span><span class="pval">${esc(e.customer_uid)}</span></div>` : ""}
+          ${e.customer_uid ? `<div class="prop"><span>客户 UID</span><span class="pval">${API ? `<button class="btn ghost linkbtn" data-uid-go="${esc(e.customer_uid)}" title="查询该 UID 关联的群">${esc(e.customer_uid)}</button>` : esc(e.customer_uid)}</span></div>` : ""}
           <div class="prop"><span>首次消息</span><span class="pval">${esc(fmtFull(e.start_time))}</span></div>
           <div class="prop"><span>最近消息</span><span class="pval${isStale(e) ? "" : ""}" style="${isStale(e) ? "color:var(--warn)" : ""}">${esc(fmtFull(e.end_time))}${isStale(e) ? `<br><span style="font-size:12px">${esc(ago(e.end_time))}，超过 24 小时</span>` : ""}</span></div>
           <div class="prop"><span>置信度</span><span class="pval conf"><i><b style="width:${conf}%"></b></i>${e.confidence.toFixed(2)}</span></div>
@@ -1276,7 +1383,7 @@ svg { display: block; flex: none; }
       if (!r.ok) throw new Error(r.status);
       const nd = await r.json();
       const live = $("#live");
-      const editing = (ui.page === "settings" || ui.page === "chat") && document.activeElement && /SELECT|INPUT/.test(document.activeElement.tagName);
+      const editing = (ui.page === "settings" || ui.page === "chat" || ui.page === "uid") && document.activeElement && /SELECT|INPUT/.test(document.activeElement.tagName);
       if (editing) return;
       if (nd.version !== D.version || JSON.stringify(nd.model_settings) !== JSON.stringify(D.model_settings) || JSON.stringify(nd.sync) !== JSON.stringify(D.sync)) {
         D = nd; edits = nd.edits || {}; history = nd.history || {};
@@ -1387,25 +1494,39 @@ svg { display: block; flex: none; }
   document.addEventListener("click", ev => {
     const t = ev.target;
     const cg = t.closest("[data-chat-gid]");
-    if (cg) { ev.stopPropagation(); return openChat(cg.dataset.chatGid, todayStr()); }
+    if (cg) { ev.stopPropagation(); return openChat(cg.dataset.chatGid, cg.dataset.chatDate || todayStr(), null, cg.dataset.chatUid, cg.dataset.chatName); }
+    const ug = t.closest("[data-uid-go]");
+    if (ug) { ev.stopPropagation(); if (current) closePeek(); return lookupUid(ug.dataset.uidGo); }
     const ce = t.closest("[data-chat-event]");
     if (ce) { ev.stopPropagation(); return chatForEvent(ce.dataset.chatEvent); }
     const oe = t.closest("[data-open-event]");
     if (oe) { ev.stopPropagation(); return openPeek(oe.dataset.openEvent); }
     const pg = t.closest("[data-page-go]");
-    if (pg) { ui.page = pg.dataset.pageGo; return render(); }
+    if (pg) { ui.page = pg.dataset.pageGo; ui.q = ""; $("#q").value = ""; return render(); }
     if (ui.page !== "chat") return;
-    if (t.closest("[data-chat-latest]")) { if (chatLast() === todayStr()) { scrollChatBottom(); return renderChatBar(); } return openChat(chat.gid, todayStr()); }
-    if (t.closest("[data-chat-refresh]")) return chatLast() === todayStr() ? refreshToday(true) : openChat(chat.gid, todayStr());
-    if (t.closest("[data-chat-retry]")) return openChat(chat.gid, chatLast() || todayStr(), chat.focus);
+    if (t.closest("[data-chat-latest]")) { if (chatLast() === todayStr()) { scrollChatBottom(); return renderChatBar(); } return openChat(chat.gid, todayStr(), null, chat.uid, chat.name); }
+    if (t.closest("[data-chat-refresh]")) return chatLast() === todayStr() ? refreshToday(true) : openChat(chat.gid, todayStr(), null, chat.uid, chat.name);
+    if (t.closest("[data-chat-retry]")) return openChat(chat.gid, chatLast() || todayStr(), chat.focus, chat.uid, chat.name);
     if (t.closest("[data-chat-more]")) { chat.exhausted = false; chat.emptyStreak = 0; return loadOlder(); }
     if (t.closest("[data-chat-newer]")) return loadNewer();
     const rl = t.closest("[data-chat-role]");
     if (rl) { chat.role = rl.dataset.chatRole; render(); if (chat.atBottom) scrollChatBottom(); return; }
     if (t.closest("[data-chat-events]")) { ui.page = "events"; ui.view = "all"; ui.f = { group: [chat.gid] }; return render(); }
   }, true);
+  $("#filterbar").addEventListener("submit", ev => {
+    if (ev.target.id !== "uid-form") return;
+    ev.preventDefault();
+    lookupUid($("#uid-input").value);
+  });
+  $("#filterbar").addEventListener("input", ev => { if (ev.target.id === "uid-input") uq.input = ev.target.value.trim(); });
+  document.addEventListener("click", ev => {
+    if (ui.page !== "uid") return;
+    const dd = ev.target.closest("[data-uid-days]");
+    if (dd) { uq.days = +dd.dataset.uidDays; ui.uidDays = uq.days; return uq.uid ? lookupUid(uq.uid, uq.days) : render(); }
+    if (ev.target.closest("[data-uid-refresh]")) return lookupUid(uq.uid, uq.days, true);
+  });
   $("#filterbar").addEventListener("change", ev => {
-    if (ev.target.id === "chat-date" && ev.target.value) openChat(chat.gid, ev.target.value > todayStr() ? todayStr() : ev.target.value);
+    if (ev.target.id === "chat-date" && ev.target.value) openChat(chat.gid, ev.target.value > todayStr() ? todayStr() : ev.target.value, null, chat.uid, chat.name);
   });
 
   $("#peek").addEventListener("click", ev => {
@@ -1463,7 +1584,11 @@ svg { display: block; flex: none; }
   // 清理已不存在的筛选值
   recompute();
   for (const k of Object.keys(ui.f)) { if (!FIELDS[k]) delete ui.f[k]; }
-  render();
+  // 支持分享链接 #uid=<UID>；刷新页面时停在 UID 页的，重新查一次
+  const hashUid = (location.hash.match(/^#uid=(\d{5,20})$/) || [])[1];
+  if (hashUid) lookupUid(hashUid);
+  else if (ui.page === "uid" && uq.uid && API) lookupUid(uq.uid);
+  else render();
 })();
 </script>
 </body>

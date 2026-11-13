@@ -149,3 +149,88 @@ def test_group_messages_via_relay_not_saved(raw, settings, tmp_path):
         assert not list(tmp_path.rglob("*.json"))  # 不落盘
     finally:
         srv.shutdown(); srv.server_close(); relay.shutdown(); relay.server_close()
+
+
+def test_uid_lookup_via_relay(raw, settings, tmp_path):
+    """按 UID 查询：用 UID 和日期范围请求数据源，返回关联的群（内部群、客户群），聊天记录也按该 UID 取。"""
+    from datetime import date, timedelta
+
+    from aftersales_events.relay import make_relay
+
+    calls = []
+    today = date.today().isoformat()
+
+    def fake_request(uid, start, end, cfg):
+        calls.append((uid, start, end))
+        if uid == "0":
+            return {"code": 0, "uid": "0", "total": 0, "groups": []}  # 「全部群」里没有带 UID 的群
+        def rec(i, gid, name, inner, t):
+            return {"id": str(i), "group_number": gid, "group_name": name, "sender_number": f"s{inner}", "display_name": "内部甲" if inner else "客户乙",
+                    "nick_name": "", "content": f"消息{i} 13800138000", "created_at": t, "send_time": t, "is_inner": inner}
+        g1 = ("R:9001", f"「内部」示例-{uid}")
+        g2 = ("R:9002", f"示例&七牛云-{uid}<5-000000-0-0>")
+        return {"code": 0, "uid": uid, "total": 4, "groups": [
+            {"group_number": g1[0], "group_name": g1[1], "records": [rec(1, *g1, 1, f"{today} 09:00:00"), rec(2, *g1, 1, f"{today} 09:05:00")]},
+            {"group_number": g2[0], "group_name": g2[1], "records": [rec(3, *g2, 0, f"{start} 10:00:00"), rec(4, *g2, 1, f"{start} 10:01:00")]},
+            {"group_number": g2[0], "group_name": g2[1], "records": [rec(4, *g2, 1, f"{start} 10:01:00")]},  # 重复的一段
+        ]}
+
+    relay = make_relay({}, "127.0.0.1", 0, request_fn=fake_request)
+    threading.Thread(target=relay.serve_forever, daemon=True).start()
+    rbase = f"http://127.0.0.1:{relay.server_address[1]}"
+    assert req(rbase + "/chat?uid=1&start=2026-11-01&end=2026-12-31")[0] == 400  # 超过 31 天
+    assert req(rbase + "/chat?uid=1&start=2026-11-10&end=2026-11-01")[0] == 400  # 倒序
+    assert req(rbase + "/chat?uid=1&start=2026-11-01&end=2026-11-07")[0] == 200
+    calls.clear()
+
+    (tmp_path / "out").mkdir()
+    app = BoardApp(settings, tmp_path / "out", None, tmp_path / "state.json", relay_url=rbase)
+    srv = make_server(app, "127.0.0.1", 0)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.server_address[1]}"
+    try:
+        assert req(base + "/api/uids/0")[0] == 400  # 0 是「全部群」，不能用来查
+        assert req(base + "/api/uids/abc")[0] == 400
+        assert req(base + "/api/uids/1383603926?days=40")[0] == 400
+        d = json.loads(req(base + "/api/uids/1383603926?days=7")[1])
+        start = (date.today() - timedelta(days=6)).isoformat()
+        assert calls == [("1383603926", start, today)]
+        assert [g["id"] for g in d["groups"]] == ["R:9002", "R:9001"]  # 客户群在前
+        cust, inner = d["groups"]
+        assert cust["name"] == "示例&七牛云-1383603926" and not cust["internal"] and cust["messages"] == 2  # 去重
+        assert cust["uid"] == "1383603926" and cust["inner"] == 1 and cust["customer"] == 1
+        assert inner["internal"] and inner["messages"] == 2 and inner["last"] == f"{today}T09:05:00"
+
+        # 聊天记录按 UID 取；不带 uid 时走「全部群」，取不到这个群
+        m = json.loads(req(base + f"/api/groups/R%3A9001/messages?date={today}&uid=1383603926")[1])
+        assert m["total"] == 2 and calls[-1] == ("1383603926", today, today)
+        assert "<PHONE>" in m["messages"][0]["content"]
+        assert json.loads(req(base + f"/api/groups/R%3A9001/messages?date={today}")[1])["total"] == 0
+        assert req(base + f"/api/groups/R%3A9001/messages?date={today}&uid=x1")[0] == 400
+        assert not list(tmp_path.rglob("*.json"))  # 不落盘
+    finally:
+        srv.shutdown(); srv.server_close(); relay.shutdown(); relay.server_close()
+
+
+def test_uid_lookup_from_stored_raw(server):
+    """未配置实时取数时，从已保存的 <uid>_<start>_<end>.json 里找该 UID 的群。"""
+    from datetime import date
+
+    base, app, tmp = server
+    today = date.today().isoformat()
+    data = json.loads((ROOT / "tests" / "fixtures" / "sample_response.json").read_text(encoding="utf-8"))
+    for g in data["groups"]:
+        for r in g["records"]:
+            r["send_time"] = r["created_at"] = today + r["send_time"][10:]
+    (tmp / "raw" / f"1380000002_{today}_{today}.json").write_text(json.dumps(data, ensure_ascii=False))
+    d = json.loads(req(base + "/api/uids/1380000002?days=1")[1])
+    assert d["source"] == "stored" and {g["id"] for g in d["groups"]} == {"R:1001", "R:1002"}
+    assert {g["uid"] for g in d["groups"]} == {"1380000001", "1380000002"}  # 群名里的 UID 优先
+    m = json.loads(req(base + f"/api/groups/R%3A1002/messages?date={today}&uid=1380000002")[1])
+    assert m["source"] == "stored" and m["total"] == 3
+    assert req(base + "/api/uids/1399999999?days=1")[0] == 404  # 没有这个 UID 的文件
+    (tmp / "raw" / f"0_{today}_{today}.json").write_text(json.dumps(data, ensure_ascii=False))
+    d = json.loads(req(base + "/api/uids/1399999999?days=1")[1])
+    assert d["groups"] == []  # 「全部群」文件里没有这个 UID 的群
+    d = json.loads(req(base + "/api/uids/1380000001?days=1")[1])
+    assert [g["id"] for g in d["groups"]] == ["R:1001"]
