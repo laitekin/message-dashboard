@@ -57,10 +57,14 @@ def cmd_run(args, settings) -> None:
 
 
 def cmd_sync(args, settings) -> None:
-    from .sync import run_locked
+    from .sync import run_jobs, run_locked
 
+    if args.requests:  # 看板上提交的手动任务（由 aftersales-sync-now.path 触发）
+        res = run_jobs(settings, args.queue, args.jobs_lock, runtime_path=args.runtime, max_windows=args.max_windows)
+        print(json.dumps(res, ensure_ascii=False, indent=2))
+        return
     status = run_locked(settings, args.lock, runtime_path=args.runtime, uid=args.uid, days=args.days, reprocess=args.reprocess,
-                        max_windows=args.max_windows, skip_fetch=args.no_fetch)
+                        max_windows=args.max_windows, skip_fetch=args.no_fetch, watch=args.watch)
     print(json.dumps(status, ensure_ascii=False, indent=2))
     # 部分对话抽取失败不算整体失败（下次自动重试，状态文件里有记录）；拉取全部失败或一段都没处理成功才算失败
     fetch_failed = status.get("fetch") and all("error" in v for v in status["fetch"].values())
@@ -97,7 +101,7 @@ def cmd_serve(args, settings) -> None:
     from .serve import BoardApp, make_server
 
     app = BoardApp(settings, args.out_dir, args.raw_dir, args.state, title=args.title, sync_status=args.sync_status,
-                   runtime_path=args.runtime, relay_url=args.relay)
+                   runtime_path=args.runtime, relay_url=args.relay, queue_path=args.queue)
     server = make_server(app, args.host, args.port)
     print(f"看板服务已启动：http://{args.host}:{server.server_address[1]}/（事件目录 {args.out_dir}，修改记录 {args.state}）")
     try:
@@ -155,7 +159,11 @@ def main(argv: list[str] | None = None) -> None:
     sp.add_argument("--reprocess", action="store_true", help="忽略缓存全部重新抽取（改了 prompt 或事件定义后使用）")
     sp.add_argument("--no-fetch", action="store_true", help="不拉取，只用已保存的原始文件")
     sp.add_argument("--lock", default="data/sync.lock")
-    sp.add_argument("--runtime", default="data/runtime_settings.json", help="看板「设置」页保存的模型选择（优先于 AES_MODEL）")
+    sp.add_argument("--runtime", default="data/runtime_settings.json", help="看板「设置」页保存的模型选择和关注的 UID（优先于 AES_MODEL）")
+    sp.add_argument("--no-watch", dest="watch", action="store_false", help="只处理 --uid，不处理关注列表里的 UID")
+    sp.add_argument("--requests", action="store_true", help="处理看板上提交的手动任务，直到队列为空")
+    sp.add_argument("--queue", default="data/sync_requests.json", help="手动任务队列文件")
+    sp.add_argument("--jobs-lock", default="data/sync-now.lock")
     sp.set_defaults(func=cmd_sync)
 
     sp = sub.add_parser("eval", help="与人工标注对比")
@@ -179,6 +187,7 @@ def main(argv: list[str] | None = None) -> None:
     sp.add_argument("--title", default="售后事件看板")
     sp.add_argument("--sync-status", default="data/sync_status.json", help="aes sync 写出的状态文件，用于在看板上显示同步情况")
     sp.add_argument("--runtime", default="data/runtime_settings.json", help="「设置」页保存模型选择的位置（aes sync 读取）")
+    sp.add_argument("--queue", default="data/sync_requests.json", help="手动处理任务队列（aes sync --requests 读取）")
     sp.add_argument("--relay", help="取数中转地址（aes relay），如 http://127.0.0.1:8472；配置后聊天记录实时获取、不落盘")
     sp.set_defaults(func=cmd_serve)
 

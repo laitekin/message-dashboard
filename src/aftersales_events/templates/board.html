@@ -205,6 +205,15 @@ svg { display: block; flex: none; }
 .uid-hint { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 24px; border-bottom: 1px solid var(--border); color: var(--accent); text-align: left; }
 .uid-hint:hover { background: var(--hover); }
 .linkbtn { color: var(--accent); padding: 0; height: auto; }
+.uid-act { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 24px 12px; font-size: 12px; color: var(--muted); }
+.uid-act select, .watch-add input { height: 26px; border: 1px solid var(--border-2); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 12px; padding: 0 6px; }
+.uid-act .sep { width: 1px; height: 16px; background: var(--border-2); margin: 0 4px; }
+.jobst { display: inline-flex; align-items: center; gap: 6px; }
+.jobst.run { color: var(--accent); }
+.jobst.bad { color: var(--urgent); }
+.spin { width: 10px; height: 10px; border: 1.5px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.watch-add { display: flex; gap: 8px; padding: 12px 16px; align-items: center; flex-wrap: wrap; }
 .linkbtn:hover { text-decoration: underline; }
 
 /* ---------------------------------------------------------------- settings */
@@ -557,6 +566,46 @@ svg { display: block; flex: none; }
   const uq = { uid: ui.uid || "", input: ui.uid || "", days: ui.uidDays || 7, data: null, loading: false, error: null, seq: 0 };
   const RE_UIDQ = /^\d{5,20}$/;
   const RE_INNER_GROUP = /^\s*[「\[【(（]?\s*内部/;
+  // 按 UID 处理事件：关注列表（每小时自动处理）+ 手动任务
+  const JOBS = () => D.jobs || { enabled: false, watch: [], jobs: [], max_days: 7 };
+  const isWatched = uid => JOBS().watch.some(w => w.uid === uid);
+  const jobsOf = uid => JOBS().jobs.filter(j => j.uid === uid);
+  const lastJob = uid => jobsOf(uid).slice().sort((a, b) => ((a.finished_at || a.started_at || a.at) > (b.finished_at || b.started_at || b.at) ? 1 : -1))
+    .reduce((m, j) => (j.state === "pending" || j.state === "running") ? j : (m && (m.state === "pending" || m.state === "running") ? m : j), null);
+  const jobsActive = () => JOBS().jobs.some(j => j.state === "pending" || j.state === "running");
+  const uidEvents = (uid, gids) => ALL.filter(e => e.customer_uid === uid || (gids && gids.has(e.group_number)) || ((GBY[e.group_number] || {}).src_uid === uid));
+  function jobText(j, short, noBy) {
+    if (!j) return "";
+    const r = j.result || {};
+    if (j.state === "pending") return `<span class="jobst run"><span class="spin"></span>排队中 · ${esc(j.by || "")} ${esc(ago(j.at))}提交，最近 ${j.days} 天</span>`;
+    if (j.state === "running") return `<span class="jobst run"><span class="spin"></span>正在处理最近 ${j.days} 天 · 开始于 ${esc(fmtFull(j.started_at).slice(11))}</span>`;
+    if (j.state === "failed") return `<span class="jobst bad" title="${esc(j.error || "")}">处理失败 · ${esc(ago(j.finished_at))}${short ? "" : "：" + esc(j.error || "")}</span>`;
+    return `<span class="jobst" title="${esc((r.warnings || []).join("\n"))}">${short || noBy ? "" : `${esc(j.by || "")} `}处理完成 · ${esc(ago(j.finished_at))}${short ? "" : `：${r.groups ?? "–"} 个群、${r.windows ?? "–"} 段对话，新抽取 ${r.extracted ?? 0} 段，相关事件 ${r.events ?? 0} 个${r.pending ? `，还有 ${r.pending} 段稍后处理` : ""}`}</span>`;
+  }
+  async function postJson(url, body) {
+    const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const b = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(b.error || r.status);
+    return b;
+  }
+  async function setWatch(uid, on) {
+    try {
+      const b = await postJson("api/watch", { uid, watch: on });
+      D.jobs = Object.assign({}, D.jobs, b);
+      render();
+      toast(on ? `已开启 UID ${uid} 的自动处理，正在补处理最近 ${JOBS().max_days} 天` : `已关闭 UID ${uid} 的自动处理，已有事件保留`);
+      if (on) pollSoon();
+    } catch (err) { toast("操作失败：" + err.message, true); }
+  }
+  async function runJob(uid, days) {
+    try {
+      const b = await postJson("api/jobs", { uid, days });
+      D.jobs = Object.assign({}, D.jobs, b);
+      render();
+      toast(`已提交：处理 UID ${uid} 最近 ${days} 天`);
+      pollSoon();
+    } catch (err) { toast("提交失败：" + err.message, true); }
+  }
   const saveUi = () => store.set("aes-board:ui2", Object.assign({}, ui, { q: "", page: ui.page === "chat" ? (chat.uid ? "uid" : "groups") : ui.page }));
 
   function filtered() {
@@ -627,7 +676,10 @@ svg { display: block; flex: none; }
     // 侧边栏只列最需要关注的群：有未关闭事件的优先，按最高优先级、未关闭数排序
     const focus = GROUPS.filter(g => g.open).sort(byAttention).slice(0, 8);
     $("#nav-groups").innerHTML = navItem(`data-page="groups"`, I.users, "全部客户群", GROUPS.length, ui.page === "groups") +
-      (API ? navItem(`data-page="uid"`, I.person, "按 UID 查询", "", ui.page === "uid" || (ui.page === "chat" && !!chat.uid)) : "") +
+      (API ? navItem(`data-page="uid"`, I.person, "按 UID 查询", "", ui.page === "uid" && !isWatched(uq.uid) || (ui.page === "chat" && !!chat.uid && !isWatched(chat.uid))) : "") +
+      (API ? JOBS().watch.slice(0, 8).map(w => { const lj = lastJob(w.uid), busy = lj && (lj.state === "pending" || lj.state === "running");
+        return navItem(`data-uid-go="${esc(w.uid)}" title="自动处理中的 UID${w.note ? " · " + esc(w.note) : ""}"`, busy ? `<span class="spin" style="color:var(--accent)"></span>` : `<span class="muted" style="font-size:11px">#</span>`, w.uid,
+          uidEvents(w.uid).filter(e => OPEN.has(e.status)).length || "", (ui.page === "uid" && uq.uid === w.uid) || (ui.page === "chat" && chat.uid === w.uid)); }).join("") : "") +
       focus.map(g => navItem(`data-group="${esc(g.id)}" title="${esc(g.raw_name || g.name)}"`, gav(g.id, g.name, 16), g.name, g.open, ev && onlyGroup === g.id)).join("");
     const ms = D.model_settings || {};
     $("#nav-system").innerHTML = navItem(`data-page="settings"`, I.gear, "设置", ms.selected && ms.selected !== ms.in_use ? "待生效" : "", ui.page === "settings");
@@ -715,7 +767,7 @@ svg { display: block; flex: none; }
     const stale = open.filter(isStale).length;
     const oneGroup = (ui.f.group || []).length === 1 ? ui.f.group[0] : null;
     $("#filterbar").innerHTML = chips + `<button class="fadd" id="btn-filter">${I.filter}<span>筛选</span></button>` +
-      (oneGroup && API ? `<button class="fadd" data-chat-gid="${esc(oneGroup)}">${I.msg}<span>聊天记录</span></button>` : "") +
+      (oneGroup && API ? `<button class="fadd" data-chat-gid="${esc(oneGroup)}"${(GBY[oneGroup] || {}).src_uid ? ` data-chat-uid="${esc(GBY[oneGroup].src_uid)}"` : ""}>${I.msg}<span>聊天记录</span></button>` : "") +
       (chips ? `<button class="fadd" id="btn-clear">清除</button>` : "") +
       `<span class="stats"><span>未关闭 <b>${open.length}</b></span><span class="${urgent ? "hot" : ""}">紧急/高 <b>${urgent}</b></span><span class="${stale ? "hot" : ""}">超 24h 无动态 <b>${stale}</b></span><span>客户 <b>${new Set(list.map(e => e.group_number)).size}</b></span></span>`;
   }
@@ -746,7 +798,7 @@ svg { display: block; flex: none; }
     const tn = Object.fromEntries(D.types.map(t => [t.name, t]));
     $("#content").innerHTML = hint + `<div class="gt-head"><span>客户群</span><span>未关闭 / 全部事件</span><span class="c-types">未关闭事件类型</span><span class="c-msgs">消息（24h）</span><span>最近消息</span></div>` +
       list.map(g => `<div class="gt-row" data-gid="${esc(g.id)}" title="${esc(g.raw_name || g.name)}">
-        <span class="gt-name">${gav(g.id, g.name)}<span class="t">${esc(g.name)}</span>${g.uid ? `<span class="muted">${esc(g.uid)}</span>` : ""}${API ? `<button class="ib chat-btn" data-chat-gid="${esc(g.id)}" title="查看聊天记录" aria-label="查看聊天记录">${I.msg}</button>` : ""}</span>
+        <span class="gt-name">${gav(g.id, g.name)}<span class="t">${esc(g.name)}</span>${g.uid ? `<span class="muted">${esc(g.uid)}</span>` : ""}${API ? `<button class="ib chat-btn" data-chat-gid="${esc(g.id)}"${g.src_uid ? ` data-chat-uid="${esc(g.src_uid)}"` : ""} title="查看聊天记录" aria-label="查看聊天记录">${I.msg}</button>` : ""}</span>
         <span class="gt-open">${g.open ? priIcon(D.levels[g.top]) : `<span style="width:14px"></span>`}<b>${g.open || "–"}</b><span class="muted">/ ${g.total}</span>${g.stale ? `<span class="date stale" style="width:auto" title="${g.stale} 个事件超过 24 小时无动态">${I.clock}</span>` : ""}</span>
         <span class="gt-types">${Object.entries(g.types).sort((a, b) => b[1] - a[1]).map(([t, c]) => `<span title="${esc(t)}${tn[t] && tn[t].push_to ? " → " + esc(tn[t].push_to) : ""}">${dot(t)}${esc(t)} ${c}</span>`).join("") || `<span class="muted">–</span>`}</span>
         <span class="gt-msgs" title="${g.messages == null ? "" : `内部 ${g.inner} · 客户 ${g.customer} · ${g.senders} 人发言${g.images ? ` · 图片 ${g.images}` : ""}`}">${g.messages == null ? "–" : `${g.messages}<span class="muted">（${g.recent_24h}）</span>`}</span>
@@ -954,6 +1006,19 @@ svg { display: block; flex: none; }
       </form>
       ${uq.data ? `<span class="stats"><span>${esc(uq.data.start.slice(5))} ~ ${esc(uq.data.end.slice(5))} · ${uq.data.source === "live" ? "实时获取" : "已保存数据"} ${esc(fmtFull(uq.data.fetched_at).slice(11))}</span><button class="fadd" data-uid-refresh>刷新</button></span>` : ""}`;
   }
+  // 事件处理：自动（关注列表，每小时）/ 手动（立即处理最近几天）
+  function uidActions(uid) {
+    const J = JOBS();
+    if (!API || !J.enabled || !uid) return "";
+    const on = isWatched(uid), w = J.watch.find(x => x.uid === uid), lj = lastJob(uid);
+    const busy = lj && (lj.state === "pending" || lj.state === "running");
+    const auto = on
+      ? `<span class="pill">自动处理中</span><span title="${w && w.by ? `${esc(w.by)} 于 ${esc(fmtFull(w.at))} 开启` : ""}">每小时处理最近 ${D.sync && D.sync.dates ? D.sync.dates.length : 2} 天的消息</span><button class="fadd" data-watch="${esc(uid)}" data-on="0">关闭</button>`
+      : `<button class="btn primary" style="height:26px" data-watch="${esc(uid)}" data-on="1" title="加入关注列表：每小时随「全部群」一起处理，并立即补处理最近 ${J.max_days} 天">开启自动处理</button>`;
+    const manual = `<select id="job-days" aria-label="处理范围">${[1, 2, 7].filter(n => n <= J.max_days).map(n => `<option value="${n}"${n === (on ? 2 : 7) ? " selected" : ""}>最近 ${n} 天</option>`).join("")}</select>
+      <button class="btn" style="height:26px" data-job-uid="${esc(uid)}"${busy ? " disabled" : ""}>立即处理</button>`;
+    return `<div class="uid-act">${auto}<span class="sep"></span>${manual}${lj ? `<span class="sep"></span>${jobText(lj)}` : ""}</div>`;
+  }
   function renderUid() {
     order = [];
     const box = $("#content");
@@ -962,13 +1027,13 @@ svg { display: block; flex: none; }
       return;
     }
     if (uq.error) { box.innerHTML = `<div class="empty"><div class="muted">${I.person}</div><h3>查询失败</h3><p>${esc(uq.error)}</p>${uq.uid ? `<button class="btn" data-uid-refresh>重试</button>` : ""}</div>`; return; }
-    if (uq.loading || !uq.data) { box.innerHTML = `<div class="empty"><div class="muted">${I.person}</div><h3>正在查询 UID ${esc(uq.uid)} 关联的群…</h3><p>实时请求数据源（近 ${uq.days} 天），不在服务器存储，通常需要几秒。</p></div>`; return; }
+    if (uq.loading || !uq.data) { box.innerHTML = uidActions(uq.uid) + `<div class="empty"><div class="muted">${I.person}</div><h3>正在查询 UID ${esc(uq.uid)} 关联的群…</h3><p>实时请求数据源（近 ${uq.days} 天），不在服务器存储，通常需要几秒。</p></div>`; return; }
     const d = uq.data;
     // 数据源返回的群 + 看板里已知的同 UID 群（这段时间可能没有消息）
     const rows = d.groups.slice();
     GROUPS.filter(g => g.uid === d.uid && !rows.some(x => x.id === g.id))
       .forEach(g => rows.push({ id: g.id, name: g.name, raw_name: g.raw_name, uid: g.uid, internal: RE_INNER_GROUP.test(g.raw_name || g.name || ""), messages: 0, inner: 0, customer: 0, senders: 0, last: g.last, known: true }));
-    const evs = d.event_ids.map(id => BY_ID[id]).filter(Boolean).sort((a, b) => LV[a.level] - LV[b.level] || (b.end_time > a.end_time ? 1 : -1));
+    const evs = uidEvents(d.uid, new Set(rows.map(g => g.id))).sort((a, b) => LV[a.level] - LV[b.level] || (b.end_time > a.end_time ? 1 : -1));
     order = evs.map(e => e.event_id);
     const groupsHtml = rows.length ? `<div class="gt-head"><span>关联的群</span><span>未关闭 / 全部事件</span><span class="c-types">类型</span><span class="c-msgs">消息（近 ${d.days} 天）</span><span>最近消息</span></div>` +
       rows.map(g => {
@@ -984,8 +1049,8 @@ svg { display: block; flex: none; }
       }).join("")
       : `<div class="empty" style="padding:40px 24px"><div class="muted">${I.users}</div><h3>近 ${d.days} 天没有找到关联的群</h3><p>${d.days < 31 ? `可以<button class="btn ghost linkbtn" data-uid-days="31">扩大到近 31 天</button>再查。` : "请确认 UID 是否正确。"}</p></div>`;
     const evHtml = evs.length ? `<div class="uid-sec"><b>相关事件</b><span>${evs.length} 个 · 未关闭 ${evs.filter(e => OPEN.has(e.status)).length}</span></div>` + evs.map(row).join("")
-      : `<div class="uid-sec"><b>相关事件</b><span>看板里暂无该 UID 的事件（每小时的自动处理只覆盖「全部群」）</span></div>`;
-    box.innerHTML = `<div class="uid-sec"><b>UID ${esc(d.uid)}</b><span>近 ${d.days} 天有消息的群 ${d.groups.length} 个 · 点击一行查看聊天记录</span></div>` + groupsHtml + evHtml;
+      : `<div class="uid-sec"><b>相关事件</b><span>${isWatched(d.uid) ? "暂无事件（已开启自动处理，有事件后会出现在这里）" : "暂无事件。这些群不在「全部群」里，需要开启自动处理或手动处理一次才会抽取事件"}</span></div>`;
+    box.innerHTML = `<div class="uid-sec"><b>UID ${esc(d.uid)}</b><span>近 ${d.days} 天有消息的群 ${d.groups.length} 个 · 点击一行查看聊天记录</span></div>` + uidActions(d.uid) + groupsHtml + evHtml;
   }
 
   function nextRun() {
@@ -1017,18 +1082,34 @@ svg { display: block; flex: none; }
       </div>
       ${(ms.history || []).length ? `<ul class="slog">${ms.history.slice().reverse().map(h => `<li><b>${esc(h.by)}</b> 将模型从 ${fmtModel(h.from)} 改为 ${fmtModel(h.to)} · <span title="${esc(fmtFull(h.at))}">${esc(ago(h.at))}</span></li>`).join("")}</ul>` : ""}
 
+      ${API && JOBS().enabled ? watchSection() : ""}
+
       <h2>数据处理</h2>
-      <p class="desc">每小时自动拉取全部群最近几天的聊天记录，只把新出现或有新消息的对话交给模型，结果合并后显示在看板上。送给模型前人名会换成代号。</p>
+      <p class="desc">每小时自动拉取全部群（以及自动处理列表里的 UID）最近几天的聊天记录，只把新出现或有新消息的对话交给模型，结果合并后显示在看板上。送给模型前人名会换成代号。</p>
       <div class="scard">
         <div class="srow"><span class="k">状态</span><span class="v">${st}</span></div>
         <div class="srow"><span class="k">上次处理</span><span class="v">${sy.finished_at ? `${esc(fmtFull(sy.finished_at))} <span class="muted">（${esc(ago(sy.finished_at))}，耗时 ${sy.duration_seconds}s）</span>` : "–"}</span></div>
         <div class="srow"><span class="k">下次处理</span><span class="v">${nextRun()}</span></div>
-        <div class="srow"><span class="k">拉取范围</span><span class="v">${sy.dates ? `全部群（UID ${esc(sy.uid)}）· ${sy.dates.map(esc).join("、")}` : "–"}</span></div>
+        <div class="srow"><span class="k">拉取范围</span><span class="v">${sy.dates ? `全部群（UID ${esc(sy.uid)}）${(sy.watch_uids || []).length ? ` + ${sy.watch_uids.length} 个自动处理的 UID` : ""} · ${sy.dates.map(esc).join("、")}` : "–"}</span></div>
         <div class="srow"><span class="k">对话段</span><span class="v">${sy.windows != null ? `共 ${sy.windows} 段：新处理 ${sy.extracted}，复用缓存 ${sy.cached}${sy.failed ? `，<span style="color:var(--urgent)">失败 ${sy.failed}</span>` : ""}${sy.deferred ? `，积压 ${sy.deferred}（之后几次处理完）` : ""}<br><span class="muted">每次最多处理 ${sy.max_windows || "-"} 段</span>` : "–"}</span></div>
         <div class="srow"><span class="k">事件</span><span class="v">${sy.events != null ? `${sy.events} 个（${sy.groups_with_events} 个群）` : "–"}</span></div>
         ${(sy.errors || []).length ? `<div class="srow"><span class="k">错误</span><span class="v" style="color:var(--urgent)">${sy.errors.map(esc).join("<br>")}</span></div>` : ""}
       </div>
     </div>`;
+  }
+  function watchSection() {
+    const J = JOBS();
+    const recent = J.jobs.slice().reverse().filter(j => j.reason !== "watch" || j.state !== "done").slice(0, 8);
+    return `<h2>按 UID 自动处理</h2>
+      <p class="desc">带 UID 的客户群和对应的内部群不在「全部群」里。加入这里的 UID 每小时随「全部群」一起处理，加入时立即补处理最近 ${J.max_days} 天；移除后不再更新，已有事件保留。也可以在「按 UID 查询」页对任意 UID 手动处理一次。</p>
+      <div class="scard">
+        ${J.watch.map(w => { const lj = lastJob(w.uid); return `<div class="srow"><span class="k"><button class="btn ghost linkbtn" data-uid-go="${esc(w.uid)}">${esc(w.uid)}</button></span>
+          <span class="v" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="muted">${esc(w.by || "")} ${w.at ? esc(ago(w.at)) + "加入" : ""}</span>${lj ? jobText(lj, true) : ""}
+            <span class="spacer"></span><button class="fadd" data-job-uid="${esc(w.uid)}" data-days="2"${lj && (lj.state === "pending" || lj.state === "running") ? " disabled" : ""}>立即处理</button><button class="fadd" data-watch="${esc(w.uid)}" data-on="0">移除</button></span></div>`; }).join("")}
+        <form class="watch-add" id="watch-add"><input id="watch-add-input" inputmode="numeric" placeholder="输入 UID 加入自动处理" aria-label="加入自动处理的 UID"><button class="btn primary" type="submit" style="height:26px">加入</button>
+          ${J.watch.length ? "" : `<span class="muted">还没有关注的 UID</span>`}</form>
+      </div>
+      ${recent.length ? `<ul class="slog">${recent.map(j => `<li><b>${esc(j.by || "")}</b> ${j.reason === "watch" ? "开启自动处理" : "手动处理"} UID <button class="btn ghost linkbtn" data-uid-go="${esc(j.uid)}">${esc(j.uid)}</button> 最近 ${j.days} 天 · ${jobText(j, j.state !== "done" && j.state !== "failed", true)}</li>`).join("")}</ul>` : ""}`;
   }
   async function saveModel() {
     const sel = $("#model-select") || $("#model-input");
@@ -1385,13 +1466,20 @@ svg { display: block; flex: none; }
       const live = $("#live");
       const editing = (ui.page === "settings" || ui.page === "chat" || ui.page === "uid") && document.activeElement && /SELECT|INPUT/.test(document.activeElement.tagName);
       if (editing) return;
-      if (nd.version !== D.version || JSON.stringify(nd.model_settings) !== JSON.stringify(D.model_settings) || JSON.stringify(nd.sync) !== JSON.stringify(D.sync)) {
+      if (nd.version !== D.version || JSON.stringify(nd.model_settings) !== JSON.stringify(D.model_settings) || JSON.stringify(nd.sync) !== JSON.stringify(D.sync) || JSON.stringify(nd.jobs) !== JSON.stringify(D.jobs)) {
         D = nd; edits = nd.edits || {}; history = nd.history || {};
         render();
       } else if (live) live.classList.remove("off");
     } catch (e) { const live = $("#live"); if (live) live.classList.add("off"); }
   }
   if (API) { setInterval(refresh, 20000); document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); }); }
+  // 有排队或处理中的任务时每 4 秒刷新一次，及时显示进度和新事件
+  let fastPoll = null;
+  function pollSoon() {
+    if (!API || fastPoll) return;
+    fastPoll = setInterval(() => { if (!jobsActive()) { clearInterval(fastPoll); fastPoll = null; } refresh(); }, 4000);
+  }
+  if (jobsActive()) pollSoon();
 
   // ============================================================ 交互绑定
   $("#sidebar").addEventListener("click", ev => {
@@ -1488,7 +1576,7 @@ svg { display: block; flex: none; }
 
   function chatForEvent(id) {
     const e = BY_ID[id];
-    if (e) openChat(e.group_number, String(e.start_time).slice(0, 10), e.evidence_msg_ids);
+    if (e) openChat(e.group_number, String(e.start_time).slice(0, 10), e.evidence_msg_ids, (GBY[e.group_number] || {}).src_uid);
   }
   // 聊天记录相关的点击：可能出现在内容区、筛选栏、详情面板、顶栏
   document.addEventListener("click", ev => {
@@ -1519,6 +1607,23 @@ svg { display: block; flex: none; }
     lookupUid($("#uid-input").value);
   });
   $("#filterbar").addEventListener("input", ev => { if (ev.target.id === "uid-input") uq.input = ev.target.value.trim(); });
+  document.addEventListener("click", ev => {
+    const wt = ev.target.closest("[data-watch]");
+    if (wt) {
+      const on = wt.dataset.on === "1", uid = wt.dataset.watch;
+      if (!on && !confirm(`关闭 UID ${uid} 的自动处理？已有事件会保留，但之后不再更新。`)) return;
+      return setWatch(uid, on);
+    }
+    const jb = ev.target.closest("[data-job-uid]");
+    if (jb && !jb.disabled) { const sel = $("#job-days"); return runJob(jb.dataset.jobUid, +(jb.dataset.days || (sel && sel.value) || 2)); }
+  });
+  $("#content").addEventListener("submit", ev => {
+    if (ev.target.id !== "watch-add") return;
+    ev.preventDefault();
+    const v = $("#watch-add-input").value.trim();
+    if (!RE_UIDQ.test(v)) return toast("UID 需为 5 到 20 位数字", true);
+    setWatch(v, true);
+  });
   document.addEventListener("click", ev => {
     if (ui.page !== "uid") return;
     const dd = ev.target.closest("[data-uid-days]");

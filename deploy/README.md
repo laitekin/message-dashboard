@@ -9,6 +9,8 @@
   data/windows/  窗口抽取缓存 + 每天有效窗口清单
   data/board_state.json  看板上的人工修改与修改记录
   data/sync_status.json  最近一次 aes sync 的状态（看板左下角显示）
+  data/runtime_settings.json  看板「设置」页保存的模型选择和自动处理的 UID
+  data/sync_requests.json     看板上提交的手动处理任务（含最近 50 条结果）
   out/live/events.jsonl  aes sync 输出的事件，看板读取
 ```
 
@@ -16,7 +18,8 @@
 |---|---|
 | `aftersales-board.service` | 看板服务，只监听 127.0.0.1:8470，由 Caddy 提供 HTTPS 和登录 |
 | `aftersales-relay.service` | 取数中转，只监听 127.0.0.1:8472，供看板「聊天记录」和「按 UID 查询」实时拉取（docker exec vpn-proxy），不落盘；看板服务本身不持有 docker 权限 |
-| `aftersales-sync.service` + `.timer` | 每小时拉取全部群（UID 0）最近两天的记录，只抽取新增/变化的对话，写入 `out/live/` |
+| `aftersales-sync.service` + `.timer` | 每小时拉取全部群（UID 0）和自动处理列表里各 UID 最近两天的记录，只抽取新增/变化的对话，写入 `out/live/` |
+| `aftersales-sync-now.path` + `.service` | 看板上提交手动处理（或新加自动处理的 UID）时立即运行 `aes sync --requests`，处理完队列就退出；和每小时的 sync 可以同时运行 |
 
 `.env` 示例（值按实际填写）：
 
@@ -28,6 +31,12 @@ DEEPSEEK_API_KEY=...
 AES_FETCH_MODE=docker
 AES_FETCH_CONTAINER=vpn-proxy
 AES_FETCH_URL=https://...
+```
+
+首次启用手动处理（只需一次）：
+
+```bash
+cp /opt/aftersales-board/src/deploy/aftersales-sync-now.{service,path} /etc/systemd/system/ && systemctl daemon-reload && systemctl enable --now aftersales-sync-now.path
 ```
 
 更新代码：

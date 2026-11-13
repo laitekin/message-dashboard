@@ -1,5 +1,5 @@
 [Unit]
-Description=Aftersales event sync (aes sync: fetch all groups -> extract new conversations -> board)
+Description=Aftersales event sync (aes sync: fetch all groups + watched UIDs -> extract new conversations -> board)
 After=network-online.target docker.service
 Wants=network-online.target
 

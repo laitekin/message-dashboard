@@ -1,0 +1,10 @@
+[Unit]
+Description=Start aftersales manual jobs when the board queues one
+
+[Path]
+# 看板提交任务时创建这个标记；处理程序取任务前删除它。处理期间又有新任务时标记会留下，结束后再启动一次
+PathExists=/opt/aftersales-board/data/sync_requests.pending
+Unit=aftersales-sync-now.service
+
+[Install]
+WantedBy=multi-user.target

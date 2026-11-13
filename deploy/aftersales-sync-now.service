@@ -1,0 +1,20 @@
+[Unit]
+Description=Aftersales manual jobs (aes sync --requests: UIDs submitted from the board, run right away)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=aesboard
+Group=aesboard
+# 拉取需要 docker exec vpn-proxy（数据源只允许 VPN 出口访问）
+SupplementaryGroups=docker
+WorkingDirectory=/opt/aftersales-board
+EnvironmentFile=/opt/aftersales-board/.env
+# 处理看板上提交的任务，直到队列为空；和每小时的 sync 可以同时运行（只在写结果时短暂互斥）
+ExecStart=/opt/aftersales-board/venv/bin/aes --config /opt/aftersales-board/config -v sync --requests
+TimeoutStartSec=55min
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+Nice=10

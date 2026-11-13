@@ -12,6 +12,8 @@
                                     带 UID 的客户群不在 uid=0 的结果里，需要传 uid 才能取到
     GET  /api/uids/<UID>?days=7     按用户 UID 查询关联的群（内部群、客户群等）：最近 N 天（最多 31）
                                     有消息的群、各群消息概况，以及看板里该 UID 的事件
+    POST /api/watch                 {"uid": "...", "watch": true|false} 加入/移出自动处理的关注列表；加入时排一次最近 7 天的处理
+    POST /api/jobs                  {"uid": "...", "days": 1-7} 手动处理某个 UID（aes sync --requests 执行）
     GET  /healthz
 
 人工修改单独保存在 state 文件（JSON）里，不改动 events.jsonl，并记录谁在什么时候改了什么。
@@ -39,6 +41,7 @@ from urllib.parse import parse_qs, unquote, urlencode, urlsplit
 from .board import LEVELS, STATUSES, build_payload, clean_group_name, find_event_files, load_events, render_html
 from .config import MODEL_RE, Settings, load_runtime
 from .fetch import load_raw
+from .jobs import MAX_JOB_DAYS, JobQueue, _locked, set_watch, watch_list
 from .models import Event, Message
 from .preprocess import RE_IMAGE_URL, mask, parse_customer_uid, preprocess
 
@@ -117,7 +120,7 @@ class BoardState:
 class BoardApp:
     def __init__(self, settings: Settings, out_dir: str | Path, raw_dir: str | Path | None, state_path: str | Path,
                  title: str = "售后事件看板", sync_status: str | Path | None = None,
-                 runtime_path: str | Path | None = None, relay_url: str | None = None):
+                 runtime_path: str | Path | None = None, relay_url: str | None = None, queue_path: str | Path | None = None):
         self.settings = settings
         self.out_dir = Path(out_dir)
         self.raw_dir = Path(raw_dir) if raw_dir else None
@@ -126,6 +129,8 @@ class BoardApp:
         self.sync_status = Path(sync_status) if sync_status else None
         self.runtime_path = Path(runtime_path) if runtime_path else None
         self.relay_url = relay_url.rstrip("/") if relay_url else None
+        self.queue = JobQueue(queue_path) if queue_path else None
+        self._group_src: dict[str, str] = {}
         self._live: dict[str, tuple[float, dict, str]] = {}
         self._live_lock = threading.Lock()
         self._rt_lock = threading.Lock()
@@ -146,13 +151,23 @@ class BoardApp:
         with self._msg_lock:
             if key != self._msg_key:
                 msgs: list[Message] = []
-                for f in files:
+                seen: set[tuple[str, str]] = set()
+                src: dict[str, str] = {}
+                # 「全部群」的文件先读：同一个群两边都有时，聊天记录按 uid 0 取
+                for f in sorted(files, key=lambda f: (not f.name.startswith("0_"), f.name)):
+                    uid = f.name.split("_", 1)[0]
                     try:
                         m, _ = preprocess(load_raw(f), self.settings.enabled_types, self.settings.section("preprocess"))
-                        msgs.extend(m)
                     except Exception as e:  # 单个文件损坏不影响看板
                         log.warning("读取原始数据 %s 失败：%s", f, e)
+                        continue
+                    for x in m:  # 关注的 UID 之间可能共用一个群，按消息 ID 去重
+                        if (x.group_number, x.id) not in seen:
+                            seen.add((x.group_number, x.id))
+                            msgs.append(x)
+                            src.setdefault(x.group_number, uid)
                 self._msgs, self._msg_key = msgs, key
+                self._group_src = {g: u for g, u in src.items() if u != "0"}
             return self._msgs
 
     def sync_info(self) -> dict | None:
@@ -298,7 +313,7 @@ class BoardApp:
             "in_use": llm.get("model"),
             "selected": (rt.get("llm") or {}).get("model"),
             "available": sync.get("available_models") or [],
-            "history": rt.get("history", [])[-20:],
+            "history": [h for h in rt.get("history", []) if h.get("field", "model") == "model"][-20:],
             "updated_at": rt.get("updated_at"),
             "updated_by": rt.get("updated_by"),
         }
@@ -312,7 +327,7 @@ class BoardApp:
         available = (self.sync_info() or {}).get("available_models") or []
         if model and available and model not in available:
             raise ValueError(f"网关上没有模型 {model}")
-        with self._rt_lock:
+        with self._rt_lock, _locked(self.runtime_path):
             rt = load_runtime(self.runtime_path)
             before = (rt.get("llm") or {}).get("model")
             if model != before:
@@ -326,10 +341,38 @@ class BoardApp:
                 os.replace(tmp, self.runtime_path)
         return self.model_settings()
 
+    # ------------------------------------------------------------ 按 UID 处理：关注列表 + 手动任务
+    def jobs_info(self) -> dict:
+        jobs = self.queue.snapshot() if self.queue else []
+        return {"enabled": bool(self.queue and self.runtime_path), "max_days": MAX_JOB_DAYS,
+                "watch": watch_list(self.runtime_path), "jobs": jobs[-30:]}
+
+    def set_watch(self, uid: object, watch: object, user: str) -> dict:
+        if not (self.runtime_path and self.queue):
+            raise ValueError("未配置运行时设置或任务队列，无法修改")
+        if not isinstance(uid, str) or not isinstance(watch, bool):
+            raise ValueError("需要 uid（字符串）和 watch（true/false）")
+        _, changed = set_watch(self.runtime_path, uid.strip(), watch, user)
+        if changed and watch:  # 新关注的 UID 先补处理最近 7 天，不用等下一个整点
+            self.queue.add(uid.strip(), MAX_JOB_DAYS, user, reason="watch")
+        return self.jobs_info()
+
+    def add_job(self, uid: object, days: object, user: str) -> dict:
+        if not self.queue:
+            raise ValueError("未配置任务队列，无法手动处理")
+        if not isinstance(uid, str) or isinstance(days, bool) or not isinstance(days, int):
+            raise ValueError("需要 uid（字符串）和 days（整数）")
+        job = self.queue.add(uid.strip(), days, user)
+        return {"job": job, **self.jobs_info()}
+
     def payload(self, user: str | None = None) -> dict:
         st = self.state.snapshot()
         p = build_payload(self.events(), self.settings.enabled_types, self.messages(), self.title,
                           edits=st["edits"], history=st["history"], api=True, user=user, sync=self.sync_info())
+        for g in p["groups"]:  # 来自关注 UID 的群：查看聊天记录时要按这个 UID 取
+            if g["id"] in self._group_src:
+                g["src_uid"] = self._group_src[g["id"]]
+        p["jobs"] = self.jobs_info()
         p["model_settings"] = self.model_settings()
         p["today"] = date.today().isoformat()
         p["live_chat"] = bool(self.relay_url) or bool(self.raw_dir)
@@ -455,6 +498,18 @@ def make_handler(app: BoardApp):
                     return self._json(400, {"error": "需要 model 字段"})
                 try:
                     return self._json(200, app.set_model(body["model"], self._user()))
+                except ValueError as e:
+                    return self._json(400, {"error": str(e)})
+            if path in ("/api/watch", "/api/jobs"):
+                body = self._read_json()
+                if body is None:
+                    return
+                if not isinstance(body, dict):
+                    return self._json(400, {"error": "请求体应为 JSON 对象"})
+                try:
+                    if path == "/api/watch":
+                        return self._json(200, app.set_watch(body.get("uid"), body.get("watch"), self._user()))
+                    return self._json(200, app.add_job(body.get("uid"), body.get("days"), self._user()))
                 except ValueError as e:
                     return self._json(400, {"error": str(e)})
             m = re.fullmatch(r"/api/events/([\w-]+)(/revert)?", path)
