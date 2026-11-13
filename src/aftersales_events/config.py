@@ -74,6 +74,8 @@ def load_settings(config_dir: str | Path | None = None) -> Settings:
             llm[provider]["model"] = os.environ["AES_MODEL"]
     if os.environ.get("AES_EFFORT"):
         llm["effort"] = os.environ["AES_EFFORT"]
+    if os.environ.get("AES_TZ"):
+        raw["timezone"] = os.environ["AES_TZ"]
     fetch = raw.setdefault("fetch", {})
     if os.environ.get("AES_FETCH_MODE"):
         fetch["mode"] = os.environ["AES_FETCH_MODE"]
@@ -82,6 +84,17 @@ def load_settings(config_dir: str | Path | None = None) -> Settings:
     if os.environ.get("AES_FETCH_CONTAINER"):
         fetch["container"] = os.environ["AES_FETCH_CONTAINER"]
     return Settings(raw=raw, event_types=types)
+
+
+def apply_timezone(settings: Settings) -> str | None:
+    """把进程时区设为业务时区，datetime.now() 等都按它计算（数据源的时间是该时区的本地时间）。"""
+    import time
+
+    tz = settings.raw.get("timezone")
+    if tz and hasattr(time, "tzset"):
+        os.environ["TZ"] = tz
+        time.tzset()
+    return tz
 
 
 MODEL_RE = r"^[A-Za-z0-9][A-Za-z0-9._:/\-]{0,99}$"

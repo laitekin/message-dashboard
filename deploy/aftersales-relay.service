@@ -1,0 +1,21 @@
+[Unit]
+Description=Aftersales chat relay (aes relay) on 127.0.0.1:8472: live chat history via docker exec vpn-proxy, nothing saved
+After=network.target docker.service
+
+[Service]
+User=aesboard
+Group=aesboard
+# 数据源只允许经 vpn-proxy 容器访问，需要 docker 权限；看板服务本身不持有这个权限
+SupplementaryGroups=docker
+WorkingDirectory=/opt/aftersales-board
+EnvironmentFile=/opt/aftersales-board/.env
+ExecStart=/opt/aftersales-board/venv/bin/aes --config /opt/aftersales-board/config relay --host 127.0.0.1 --port 8472
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

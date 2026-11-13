@@ -60,7 +60,8 @@ def fetch_direct(uid: str, start: str, end: str, cfg: dict[str, Any]) -> str:
         raise FetchError(f"HTTP {e.code}{hint}") from e
 
 
-def fetch(uid: str, start: str, end: str, cfg: dict[str, Any]) -> tuple[RawResponse, Path]:
+def request(uid: str, start: str, end: str, cfg: dict[str, Any]) -> dict:
+    """请求数据源并校验返回，不落盘。"""
     if not cfg.get("url"):
         raise FetchError("请先通过 AES_FETCH_URL 或 fetch.url 配置数据源地址")
     mode = cfg.get("mode", "direct")
@@ -71,11 +72,18 @@ def fetch(uid: str, start: str, end: str, cfg: dict[str, Any]) -> tuple[RawRespo
         raise FetchError(f"返回不是 JSON：{text[:200]}") from e
     if data.get("code") != 0:
         raise FetchError(f"接口返回错误：code={data.get('code')} msg={data.get('msg')}")
+    return data
 
+
+def fetch(uid: str, start: str, end: str, cfg: dict[str, Any]) -> tuple[RawResponse, Path]:
+    """请求并保存到 raw_dir（供离线清洗）。"""
+    data = request(uid, start, end, cfg)
     raw_dir = Path(cfg.get("raw_dir", "data/raw"))
     raw_dir.mkdir(parents=True, exist_ok=True)
     path = raw_dir / f"{uid}_{start}_{end}.json"
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp.replace(path)  # 原子替换，看板读取时不会读到半个文件
     return RawResponse.model_validate(data), path
 
 

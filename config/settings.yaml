@@ -1,5 +1,9 @@
 # 运行配置。环境变量可覆盖部分字段（见 README）。
 
+# 业务时区：聊天记录里的时间、"今天"的判断、看板上显示的时间都按这个时区。
+# 服务器系统时区不同也没关系（环境变量 AES_TZ 可覆盖）。
+timezone: Asia/Shanghai
+
 fetch:
   # docker : 在能访问 Docker 的机器上执行 `docker exec <container> curl ...`
   # direct : 从当前机器直接发送 HTTP 请求

@@ -4,6 +4,7 @@ import json
 import shutil
 import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 
 import pytest
@@ -18,7 +19,7 @@ from test_pipeline import ROOT, FakeExtractor
 def server(raw, settings, tmp_path):
     run(raw, settings, FakeExtractor(), out_dir=tmp_path / "out" / "run1")
     (tmp_path / "raw").mkdir()
-    shutil.copy(ROOT / "tests" / "fixtures" / "sample_response.json", tmp_path / "raw" / "a.json")
+    shutil.copy(ROOT / "tests" / "fixtures" / "sample_response.json", tmp_path / "raw" / "0_2026-11-11_2026-11-11.json")
     (tmp_path / "sync_status.json").write_text(json.dumps({"llm": {"provider": "deepseek", "model": "deepseek-v4-pro"},
                                                          "available_models": ["deepseek-v4-pro", "deepseek-v4.1-flash"]}))
     app = BoardApp(settings, tmp_path / "out", tmp_path / "raw", tmp_path / "state.json",
@@ -103,3 +104,48 @@ def test_model_settings(server):
     res = json.loads(req(base + "/api/settings", {"model": None})[1])
     assert res["selected"] is None and len(res["history"]) == 2
     assert json.loads(req(base + "/api/settings")[1])["provider"] == "deepseek"
+
+
+def test_group_messages_from_stored_raw(server):
+    base, _, _ = server
+    code, body = req(base + "/api/groups/" + urllib.parse.quote("R:1001", safe="") + "/messages?date=2026-11-11")
+    d = json.loads(body)
+    assert code == 200 and d["source"] == "stored" and d["group"]["id"] == "R:1001"
+    # 全部消息（包括“收到”这类噪声和 OCR 重复），按 id 去重
+    assert [m["id"] for m in d["messages"]] == ["1", "2", "3", "4", "5", "6", "7", "8", "9"]
+    m7 = next(m for m in d["messages"] if m["id"] == "7")
+    assert "13812345678" not in m7["content"] and "<PHONE>" in m7["content"] and m7["sender"] == "销售小李"
+    assert next(m for m in d["messages"] if m["id"] == "5")["image"] is True
+    assert d["evidence"]["1"][0]["type"] == "故障"
+    assert req(base + "/api/groups/R%3A1001/messages?date=bad")[0] == 400
+    assert req(base + "/api/groups/R%3A1001/messages?date=2020-01-01")[0] == 404
+
+
+def test_group_messages_via_relay_not_saved(raw, settings, tmp_path):
+    from aftersales_events.relay import make_relay
+
+    calls = []
+
+    def fake_request(uid, start, end, cfg):
+        calls.append((uid, start, end))
+        return json.loads((ROOT / "tests" / "fixtures" / "sample_response.json").read_text(encoding="utf-8"))
+
+    relay = make_relay({}, "127.0.0.1", 0, request_fn=fake_request)
+    threading.Thread(target=relay.serve_forever, daemon=True).start()
+    rbase = f"http://127.0.0.1:{relay.server_address[1]}"
+    assert req(rbase + "/chat?uid=0&date=nope")[0] == 400
+    assert req(rbase + "/chat?uid=abc&date=2026-11-11")[0] == 400
+
+    (tmp_path / "out").mkdir()
+    app = BoardApp(settings, tmp_path / "out", None, tmp_path / "state.json", relay_url=rbase)
+    srv = make_server(app, "127.0.0.1", 0)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.server_address[1]}"
+    try:
+        d = json.loads(req(base + "/api/groups/R%3A1002/messages?date=2026-11-11")[1])
+        assert d["source"] == "live" and d["total"] == 3 and calls == [("0", "2026-11-11", "2026-11-11")]
+        req(base + "/api/groups/R%3A1001/messages?date=2026-11-11")
+        assert len(calls) == 1  # 同一天走内存缓存
+        assert not list(tmp_path.rglob("*.json"))  # 不落盘
+    finally:
+        srv.shutdown(); srv.server_close(); relay.shutdown(); relay.server_close()

@@ -6,6 +6,9 @@
     POST /api/events/<id>/revert    恢复为模型原始输出
     GET  /api/settings              模型设置（当前使用、已选择、可用模型、修改记录）
     POST /api/settings              {"model": "..."} 选择抽取模型，下一次 aes sync 生效；null 恢复默认
+    GET  /api/groups/<群号>/messages?date=YYYY-MM-DD
+                                    某个群某天的全部聊天记录：通过取数中转（aes relay）实时请求数据源，
+                                    只在内存里短暂缓存，不落盘；未配置中转时退回读取已保存的原始文件
     GET  /healthz
 
 人工修改单独保存在 state 文件（JSON）里，不改动 events.jsonl，并记录谁在什么时候改了什么。
@@ -24,13 +27,17 @@ import threading
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlsplit
+import time
+import urllib.error
+import urllib.request
+from datetime import date
+from urllib.parse import parse_qs, unquote, urlencode, urlsplit
 
 from .board import LEVELS, STATUSES, build_payload, find_event_files, load_events, render_html
 from .config import MODEL_RE, Settings, load_runtime
 from .fetch import load_raw
 from .models import Event, Message
-from .preprocess import preprocess
+from .preprocess import RE_IMAGE_URL, mask, preprocess
 
 log = logging.getLogger(__name__)
 
@@ -104,7 +111,7 @@ class BoardState:
 class BoardApp:
     def __init__(self, settings: Settings, out_dir: str | Path, raw_dir: str | Path | None, state_path: str | Path,
                  title: str = "售后事件看板", sync_status: str | Path | None = None,
-                 runtime_path: str | Path | None = None):
+                 runtime_path: str | Path | None = None, relay_url: str | None = None):
         self.settings = settings
         self.out_dir = Path(out_dir)
         self.raw_dir = Path(raw_dir) if raw_dir else None
@@ -112,6 +119,9 @@ class BoardApp:
         self.title = title
         self.sync_status = Path(sync_status) if sync_status else None
         self.runtime_path = Path(runtime_path) if runtime_path else None
+        self.relay_url = relay_url.rstrip("/") if relay_url else None
+        self._live: dict[str, tuple[float, dict, str]] = {}
+        self._live_lock = threading.Lock()
         self._rt_lock = threading.Lock()
         self._msg_lock = threading.Lock()
         self._msg_key: tuple = ()
@@ -146,6 +156,70 @@ class BoardApp:
             return json.loads(self.sync_status.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return None
+
+    # ------------------------------------------------------------ 聊天记录（实时）
+    LIVE_TTL_TODAY = 120
+    LIVE_TTL_PAST = 1800
+    LIVE_CACHE_DAYS = 6
+
+    def _day_raw(self, d: str) -> tuple[dict, str, str]:
+        """返回 (原始 JSON, 来源 live/stored, 获取时间)。"""
+        if not self.relay_url:
+            files = sorted(self.raw_dir.glob(f"*_{d}_{d}.json")) if self.raw_dir and self.raw_dir.exists() else []
+            if not files:
+                raise LookupError(f"没有 {d} 的数据（未配置实时取数）")
+            return json.loads(files[-1].read_text(encoding="utf-8")), "stored", datetime.fromtimestamp(files[-1].stat().st_mtime).isoformat(timespec="seconds")
+        ttl = self.LIVE_TTL_TODAY if d >= date.today().isoformat() else self.LIVE_TTL_PAST
+        with self._live_lock:
+            hit = self._live.get(d)
+            if hit and time.monotonic() - hit[0] < ttl:
+                return hit[1], "live", hit[2]
+        url = f"{self.relay_url}/chat?{urlencode({'uid': '0', 'date': d})}"
+        try:
+            with urllib.request.urlopen(url, timeout=100) as resp:
+                data = json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            try:
+                msg = json.loads(e.read()).get("error")
+            except Exception:
+                msg = None
+            raise RuntimeError(msg or f"取数失败 HTTP {e.code}") from e
+        except OSError as e:
+            raise RuntimeError(f"取数服务不可用：{e}") from e
+        fetched = datetime.now().isoformat(timespec="seconds")
+        with self._live_lock:
+            self._live[d] = (time.monotonic(), data, fetched)
+            for old in sorted(self._live, key=lambda k: self._live[k][0])[:-self.LIVE_CACHE_DAYS]:
+                self._live.pop(old, None)
+        return data, "live", fetched
+
+    def group_messages(self, gid: str, d: str) -> dict:
+        data, source, fetched = self._day_raw(d)
+        group = next((g for g in data.get("groups") or [] if g.get("group_number") == gid), None)
+        msgs, seen = [], set()
+        for r in sorted((group or {}).get("records") or [], key=lambda r: (r.get("send_time") or r.get("created_at") or "", str(r.get("id")))):
+            rid = str(r.get("id"))
+            if rid in seen:
+                continue
+            seen.add(rid)
+            content = (r.get("content") or "").strip()
+            image = content == "[图片]" or (bool(RE_IMAGE_URL.findall(content)) and len(RE_IMAGE_URL.sub("", content).strip()) < 5)
+            msgs.append({
+                "id": rid,
+                "t": (r.get("send_time") or r.get("created_at") or "").replace(" ", "T"),
+                "role": "内部" if r.get("is_inner") else "客户",
+                "sender": r.get("display_name") or r.get("nick_name") or r.get("sender_number") or "",
+                "content": mask(content),  # 手机号、邮箱、密钥照样脱敏
+                "image": image,
+            })
+        evidence: dict[str, list] = {}
+        for e in self.events():
+            if e.group_number == gid:
+                for mid in e.evidence_msg_ids:
+                    evidence.setdefault(mid, []).append({"event_id": e.event_id, "title": e.title, "type": e.type})
+        name = (group or {}).get("group_name") or next((e.group_name for e in self.events() if e.group_number == gid), gid)
+        return {"group": {"id": gid, "name": name}, "date": d, "source": source, "fetched_at": fetched,
+                "total": len(msgs), "messages": msgs, "evidence": evidence}
 
     def model_settings(self) -> dict:
         """模型设置：provider 和实际使用的模型以最近一次 sync 为准（看板服务本身不持有 API key）。"""
@@ -191,6 +265,8 @@ class BoardApp:
         p = build_payload(self.events(), self.settings.enabled_types, self.messages(), self.title,
                           edits=st["edits"], history=st["history"], api=True, user=user, sync=self.sync_info())
         p["model_settings"] = self.model_settings()
+        p["today"] = date.today().isoformat()
+        p["live_chat"] = bool(self.relay_url) or bool(self.raw_dir)
         return p
 
     def validate(self, patch: object, events: list[Event]) -> dict:
@@ -244,6 +320,21 @@ def make_handler(app: BoardApp):
                 self._send(200, render_html(app.payload(self._user())).encode(), "text/html; charset=utf-8")
             elif path == "/api/data":
                 self._json(200, app.payload(self._user()))
+            elif path.startswith("/api/groups/") and path.endswith("/messages"):
+                gid = unquote(path[len("/api/groups/"):-len("/messages")])
+                d = (parse_qs(urlsplit(self.path).query).get("date") or [date.today().isoformat()])[0]
+                try:
+                    date.fromisoformat(d)
+                except ValueError:
+                    return self._json(400, {"error": "date 需为 YYYY-MM-DD"})
+                if not gid or len(gid) > 100:
+                    return self._json(400, {"error": "群号不正确"})
+                try:
+                    self._json(200, app.group_messages(gid, d))
+                except LookupError as e:
+                    self._json(404, {"error": str(e)})
+                except RuntimeError as e:
+                    self._json(502, {"error": str(e)})
             elif path == "/api/settings":
                 self._json(200, app.model_settings())
             elif path == "/healthz":

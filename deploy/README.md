@@ -15,6 +15,7 @@
 | 单元 | 作用 |
 |---|---|
 | `aftersales-board.service` | 看板服务，只监听 127.0.0.1:8470，由 Caddy 提供 HTTPS 和登录 |
+| `aftersales-relay.service` | 取数中转，只监听 127.0.0.1:8472，供看板「聊天记录」页实时拉取（docker exec vpn-proxy），不落盘；看板服务本身不持有 docker 权限 |
 | `aftersales-sync.service` + `.timer` | 每小时拉取全部群（UID 0）最近两天的记录，只抽取新增/变化的对话，写入 `out/live/` |
 
 `.env` 示例（值按实际填写）：
@@ -32,7 +33,7 @@ AES_FETCH_URL=https://...
 更新代码：
 
 ```bash
-cd /opt/aftersales-board && git -C src pull --ff-only && venv/bin/pip install --quiet --no-deps --force-reinstall ./src && systemctl restart aftersales-board
+cd /opt/aftersales-board && git -C src pull --ff-only && venv/bin/pip install --quiet --no-deps --force-reinstall ./src && systemctl restart aftersales-relay aftersales-board
 ```
 
 常用命令：

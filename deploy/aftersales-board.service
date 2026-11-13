@@ -1,12 +1,12 @@
 [Unit]
 Description=Aftersales event board (aes serve) on 127.0.0.1:8470
-After=network.target
+After=network.target aftersales-relay.service
 
 [Service]
 User=aesboard
 Group=aesboard
 WorkingDirectory=/opt/aftersales-board
-ExecStart=/opt/aftersales-board/venv/bin/aes --config /opt/aftersales-board/config serve --host 127.0.0.1 --port 8470 --out-dir /opt/aftersales-board/out --raw-dir /opt/aftersales-board/data/raw --state /opt/aftersales-board/data/board_state.json --sync-status /opt/aftersales-board/data/sync_status.json
+ExecStart=/opt/aftersales-board/venv/bin/aes --config /opt/aftersales-board/config serve --host 127.0.0.1 --port 8470 --out-dir /opt/aftersales-board/out --raw-dir /opt/aftersales-board/data/raw --state /opt/aftersales-board/data/board_state.json --sync-status /opt/aftersales-board/data/sync_status.json --relay http://127.0.0.1:8472
 Restart=on-failure
 RestartSec=3
 NoNewPrivileges=yes

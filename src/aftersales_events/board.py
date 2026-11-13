@@ -120,6 +120,8 @@ def build_payload(
     return {
         "title": title,
         "generated_at": datetime.now().isoformat(timespec="seconds"),
+        # 数据里的时间不带时区，是业务时区的本地时间；页面据此换算，浏览器在其他时区也能正确显示
+        "tz_offset_minutes": int((datetime.now().astimezone().utcoffset() or timedelta()).total_seconds() // 60),
         # 用事件集合生成看板 ID：同一批事件重复生成时，浏览器里的修改不会丢
         "board_id": hashlib.sha1("|".join(ids).encode()).hexdigest()[:12],
         "version": version,

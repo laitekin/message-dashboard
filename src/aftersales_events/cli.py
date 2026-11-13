@@ -1,4 +1,4 @@
-"""命令行入口：aes fetch | preview | run | sync | eval | board | serve"""
+"""命令行入口：aes fetch | preview | run | sync | eval | board | serve | relay"""
 
 from __future__ import annotations
 
@@ -62,7 +62,10 @@ def cmd_sync(args, settings) -> None:
     status = run_locked(settings, args.lock, runtime_path=args.runtime, uid=args.uid, days=args.days, reprocess=args.reprocess,
                         max_windows=args.max_windows, skip_fetch=args.no_fetch)
     print(json.dumps(status, ensure_ascii=False, indent=2))
-    if not status.get("skipped") and not status.get("ok"):
+    # 部分对话抽取失败不算整体失败（下次自动重试，状态文件里有记录）；拉取全部失败或一段都没处理成功才算失败
+    fetch_failed = status.get("fetch") and all("error" in v for v in status["fetch"].values())
+    nothing_done = status.get("to_extract") and not status.get("extracted")
+    if not status.get("skipped") and (fetch_failed or nothing_done):
         sys.exit(1)
 
 
@@ -94,9 +97,22 @@ def cmd_serve(args, settings) -> None:
     from .serve import BoardApp, make_server
 
     app = BoardApp(settings, args.out_dir, args.raw_dir, args.state, title=args.title, sync_status=args.sync_status,
-                   runtime_path=args.runtime)
+                   runtime_path=args.runtime, relay_url=args.relay)
     server = make_server(app, args.host, args.port)
     print(f"看板服务已启动：http://{args.host}:{server.server_address[1]}/（事件目录 {args.out_dir}，修改记录 {args.state}）")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
+
+
+def cmd_relay(args, settings) -> None:
+    from .relay import make_relay
+
+    server = make_relay(settings.section("fetch"), args.host, args.port)
+    print(f"取数中转已启动：http://{args.host}:{server.server_address[1]}/chat?uid=0&date=YYYY-MM-DD")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -163,11 +179,21 @@ def main(argv: list[str] | None = None) -> None:
     sp.add_argument("--title", default="售后事件看板")
     sp.add_argument("--sync-status", default="data/sync_status.json", help="aes sync 写出的状态文件，用于在看板上显示同步情况")
     sp.add_argument("--runtime", default="data/runtime_settings.json", help="「设置」页保存模型选择的位置（aes sync 读取）")
+    sp.add_argument("--relay", help="取数中转地址（aes relay），如 http://127.0.0.1:8472；配置后聊天记录实时获取、不落盘")
     sp.set_defaults(func=cmd_serve)
+
+    sp = sub.add_parser("relay", help="取数中转：只监听本机，供看板实时查看聊天记录（需要能执行 docker exec）")
+    sp.add_argument("--host", default="127.0.0.1")
+    sp.add_argument("--port", type=int, default=8472)
+    sp.set_defaults(func=cmd_relay)
 
     args = p.parse_args(argv)
     logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
-    args.func(args, load_settings(args.config))
+    from .config import apply_timezone
+
+    settings = load_settings(args.config)
+    apply_timezone(settings)
+    args.func(args, settings)
 
 
 if __name__ == "__main__":

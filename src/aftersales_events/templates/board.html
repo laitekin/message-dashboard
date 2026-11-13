@@ -78,6 +78,7 @@ svg { display: block; flex: none; }
 .topbar { height: 46px; display: flex; align-items: center; gap: 8px; padding: 0 12px 0 18px; border-bottom: 1px solid var(--border); flex: none; }
 .crumb { display: flex; align-items: center; gap: 6px; font-weight: 500; min-width: 0; white-space: nowrap; }
 .crumb .count { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
+#view-name { display: inline-flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .spacer { flex: 1; }
 .search { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); width: 240px; color: var(--muted); }
 .search:focus-within { border-color: var(--accent); }
@@ -163,6 +164,32 @@ svg { display: block; flex: none; }
 .gseg button:hover { background: var(--hover); }
 .gseg button[aria-pressed="true"] { background: var(--active); color: var(--text); }
 .gsort { height: 24px; border: 1px solid var(--border-2); border-radius: 6px; background: var(--bg); font-size: 12px; padding: 0 4px; }
+
+/* ---------------------------------------------------------------- chat */
+.chat { max-width: 920px; margin: 0 auto; padding: 8px 24px 60px; }
+.cday { position: sticky; top: 0; z-index: 2; text-align: center; padding: 10px 0 6px; background: var(--bg); color: var(--muted); font-size: 12px; }
+.cmsg { display: flex; gap: 10px; padding: 6px 10px; border-radius: 8px; border-left: 2px solid transparent; }
+.cmsg:hover { background: var(--hover); }
+.cmsg.cont { padding-top: 0; }
+.cmsg.cont .av { visibility: hidden; height: 0; }
+.cmsg.ev { border-left-color: var(--accent); background: var(--accent-soft); }
+.cmsg.flash { animation: flash 1.6s ease; }
+@keyframes flash { 0%, 40% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 0 transparent; } }
+.cmsg .cb { flex: 1; min-width: 0; }
+.cmsg .ch { display: flex; gap: 8px; align-items: baseline; font-size: 12px; color: var(--muted); }
+.cmsg .ch b { color: var(--text); font-weight: 600; font-size: 13px; }
+.cmsg .ch .role { font-size: 11px; padding: 0 5px; border-radius: 4px; background: var(--active); }
+.cmsg .ch .role.in { background: var(--accent-soft); color: var(--accent); }
+.cmsg .cc { white-space: pre-wrap; word-break: break-word; line-height: 1.6; }
+.cmsg .cc a { color: var(--accent); }
+.cmsg .cc .img { color: var(--muted); font-style: italic; }
+.cmsg mark { background: rgba(242,201,76,.45); color: inherit; border-radius: 2px; }
+.cev { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.cev button { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border: 1px solid var(--border-2); border-radius: 999px; font-size: 12px; background: var(--panel); }
+.cev button:hover { border-color: var(--accent); }
+.cbar-date { height: 24px; border: 1px solid var(--border-2); border-radius: 6px; background: var(--bg); padding: 0 6px; font-size: 12px; }
+.chat-btn { opacity: 0; }
+.gt-row:hover .chat-btn, .chat-btn:focus-visible { opacity: 1; }
 
 /* ---------------------------------------------------------------- settings */
 .settings { max-width: 720px; margin: 0 auto; padding: 32px 24px 60px; }
@@ -291,6 +318,8 @@ svg { display: block; flex: none; }
   .ident, .rmeta .cust, .rmeta .typ { display: none; }
   .gt-head, .gt-row { grid-template-columns: minmax(0, 1fr) 70px 64px; padding: 0 10px; }
   .gt-types, .gt-msgs, .gt-head .c-types, .gt-head .c-msgs { display: none; }
+  .chat { padding: 4px 8px 40px; }
+  .chat-btn { opacity: 1; }
   .kanban { padding: 10px; }
   .kcol { width: 82vw; }
   .peek { top: 0; right: 0; bottom: 0; width: 100vw; border-radius: 0; }
@@ -422,7 +451,7 @@ svg { display: block; flex: none; }
   }
   const orig = id => D.events.find(e => e.event_id === id);
   const ident = e => "AS-" + e.event_id.replace(/^evt_/, "").slice(0, 4).toUpperCase();
-  const staleH = iso => (Date.now() - new Date(iso).getTime()) / 36e5;
+  const staleH = iso => (Date.now() - parseT(iso).getTime()) / 36e5;
   const isStale = e => OPEN.has(e.status) && staleH(e.end_time) > 24;
   function ownerList() {
     const n = {};
@@ -456,10 +485,21 @@ svg { display: block; flex: none; }
   const gav = (id, name, size) => `<span class="gav" style="--h:${hue(id)}${size ? `;width:${size}px;height:${size}px;font-size:${Math.round(size / 2)}px;border-radius:4px` : ""}">${esc(Array.from(cleanName(name) || "?").find(c => /[\p{L}\p{N}]/u.test(c)) || "#")}</span>`;
 
   const p2 = n => String(n).padStart(2, "0");
-  function fmtDate(iso) { const d = new Date(iso); return isNaN(d) ? "" : `${d.getMonth() + 1}月${d.getDate()}日`; }
-  function fmtFull(iso) { const d = new Date(iso); return isNaN(d) ? (iso || "") : `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`; }
+  // 数据里的时间不带时区（业务时区本地时间）：补上服务端给的偏移再解析
+  const TZ = (() => { const m = D.tz_offset_minutes; if (typeof m !== "number") return ""; const a = Math.abs(m); return (m < 0 ? "-" : "+") + p2(Math.floor(a / 60)) + ":" + p2(a % 60); })();
+  const parseT = iso => new Date(iso && TZ && /T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(iso) ? iso + TZ : iso);
+  // 显示统一用业务时区的钟点（和聊天记录原文一致），不受浏览器所在时区影响
+  function wall(iso) {
+    const d = parseT(iso);
+    if (isNaN(d)) return null;
+    if (typeof D.tz_offset_minutes !== "number") return { y: d.getFullYear(), mo: d.getMonth() + 1, d: d.getDate(), h: d.getHours(), mi: d.getMinutes() };
+    const x = new Date(d.getTime() + D.tz_offset_minutes * 6e4);
+    return { y: x.getUTCFullYear(), mo: x.getUTCMonth() + 1, d: x.getUTCDate(), h: x.getUTCHours(), mi: x.getUTCMinutes() };
+  }
+  function fmtDate(iso) { const w = wall(iso); return w ? `${w.mo}月${w.d}日` : ""; }
+  function fmtFull(iso) { const w = wall(iso); return w ? `${w.y}-${p2(w.mo)}-${p2(w.d)} ${p2(w.h)}:${p2(w.mi)}` : (iso || ""); }
   function ago(iso) {
-    const ms = Date.now() - new Date(iso).getTime();
+    const ms = Date.now() - parseT(iso).getTime();
     if (!(ms > 0)) return fmtDate(iso);
     const m = ms / 6e4;
     if (m < 1) return "刚刚";
@@ -490,8 +530,10 @@ svg { display: block; flex: none; }
   const ui = Object.assign({ page: "events", view: "all", layout: "list", group: "status", sort: "priority", q: "", f: {}, collapsed: [], showEmpty: false, gfilter: "all", gsort: "attention" },
     store.get("aes-board:ui2", {}));
   if (!VIEWS.some(v => v.key === ui.view)) ui.view = "all";
+  if (!["events", "groups", "settings"].includes(ui.page)) ui.page = "events";
   let cursor = null, current = null, order = [];
-  const saveUi = () => store.set("aes-board:ui2", Object.assign({}, ui, { q: "" }));
+  const chat = { gid: null, date: null, data: null, loading: false, error: null, role: "all", focus: [], seq: 0 };
+  const saveUi = () => store.set("aes-board:ui2", Object.assign({}, ui, { q: "", page: ui.page === "chat" ? "groups" : ui.page }));
 
   function filtered() {
     const view = VIEWS.find(v => v.key === ui.view);
@@ -532,6 +574,7 @@ svg { display: block; flex: none; }
     $("#filterbar").style.display = ui.page === "settings" ? "none" : "";
     if (ui.page === "groups") { renderGroupsBar(); renderGroups(); }
     else if (ui.page === "settings") renderSettings();
+    else if (ui.page === "chat") { renderChatBar(); renderChat(); }
     else { renderFilterbar(); renderContent(); }
     if (current) renderPeek();
     saveUi();
@@ -574,6 +617,17 @@ svg { display: block; flex: none; }
   }
 
   function renderTop() {
+    if (ui.page === "chat") {
+      const g = GBY[chat.gid];
+      $("#view-icon").innerHTML = `<span class="muted">${I.msg}</span>`;
+      $("#view-name").innerHTML = `<button class="btn ghost" data-page-go="groups" style="padding:0 4px;height:24px;color:var(--muted)">客户群</button>${I.chevR}<span>${esc(g ? g.name : cleanName((chat.data && chat.data.group.name) || chat.gid))}</span><span class="muted" style="font-weight:400">· 聊天记录</span>`;
+      $("#view-count").textContent = "";
+      $("#layout-seg").style.display = "none";
+      $("#btn-display").style.display = "none";
+      $(".search").style.display = "";
+      $("#q").placeholder = "搜索消息内容或发送人";
+      return;
+    }
     if (ui.page === "settings") {
       $("#view-icon").innerHTML = `<span class="muted">${I.gear}</span>`;
       $("#view-name").textContent = "设置";
@@ -584,6 +638,7 @@ svg { display: block; flex: none; }
       return;
     }
     $(".search").style.display = "";
+    $("#view-name").textContent = "";
     if (ui.page === "groups") {
       $("#view-icon").innerHTML = `<span class="muted">${I.users}</span>`;
       $("#view-name").textContent = "客户群";
@@ -614,7 +669,9 @@ svg { display: block; flex: none; }
     const open = list.filter(e => OPEN.has(e.status));
     const urgent = open.filter(e => LV[e.level] <= 1).length;
     const stale = open.filter(isStale).length;
+    const oneGroup = (ui.f.group || []).length === 1 ? ui.f.group[0] : null;
     $("#filterbar").innerHTML = chips + `<button class="fadd" id="btn-filter">${I.filter}<span>筛选</span></button>` +
+      (oneGroup && API ? `<button class="fadd" data-chat-gid="${esc(oneGroup)}">${I.msg}<span>聊天记录</span></button>` : "") +
       (chips ? `<button class="fadd" id="btn-clear">清除</button>` : "") +
       `<span class="stats"><span>未关闭 <b>${open.length}</b></span><span class="${urgent ? "hot" : ""}">紧急/高 <b>${urgent}</b></span><span class="${stale ? "hot" : ""}">超 24h 无动态 <b>${stale}</b></span><span>客户 <b>${new Set(list.map(e => e.group_number)).size}</b></span></span>`;
   }
@@ -642,7 +699,7 @@ svg { display: block; flex: none; }
     const tn = Object.fromEntries(D.types.map(t => [t.name, t]));
     $("#content").innerHTML = `<div class="gt-head"><span>客户群</span><span>未关闭 / 全部事件</span><span class="c-types">未关闭事件类型</span><span class="c-msgs">消息（24h）</span><span>最近消息</span></div>` +
       list.map(g => `<div class="gt-row" data-gid="${esc(g.id)}" title="${esc(g.raw_name || g.name)}">
-        <span class="gt-name">${gav(g.id, g.name)}<span class="t">${esc(g.name)}</span>${g.uid ? `<span class="muted">${esc(g.uid)}</span>` : ""}</span>
+        <span class="gt-name">${gav(g.id, g.name)}<span class="t">${esc(g.name)}</span>${g.uid ? `<span class="muted">${esc(g.uid)}</span>` : ""}${API ? `<button class="ib chat-btn" data-chat-gid="${esc(g.id)}" title="查看聊天记录" aria-label="查看聊天记录">${I.msg}</button>` : ""}</span>
         <span class="gt-open">${g.open ? priIcon(D.levels[g.top]) : `<span style="width:14px"></span>`}<b>${g.open || "–"}</b><span class="muted">/ ${g.total}</span>${g.stale ? `<span class="date stale" style="width:auto" title="${g.stale} 个事件超过 24 小时无动态">${I.clock}</span>` : ""}</span>
         <span class="gt-types">${Object.entries(g.types).sort((a, b) => b[1] - a[1]).map(([t, c]) => `<span title="${esc(t)}${tn[t] && tn[t].push_to ? " → " + esc(tn[t].push_to) : ""}">${dot(t)}${esc(t)} ${c}</span>`).join("") || `<span class="muted">–</span>`}</span>
         <span class="gt-msgs" title="${g.messages == null ? "" : `内部 ${g.inner} · 客户 ${g.customer} · ${g.senders} 人发言${g.images ? ` · 图片 ${g.images}` : ""}`}">${g.messages == null ? "–" : `${g.messages}<span class="muted">（${g.recent_24h}）</span>`}</span>
@@ -650,9 +707,92 @@ svg { display: block; flex: none; }
       </div>`).join("");
   }
 
+  // ============================================================ 聊天记录（实时获取，不在服务器存储）
+  const shiftDate = (d, n) => { const x = new Date(d + "T12:00:00"); x.setDate(x.getDate() + n); return `${x.getFullYear()}-${p2(x.getMonth() + 1)}-${p2(x.getDate())}`; };
+  const todayStr = () => D.today || new Date().toISOString().slice(0, 10);
+  function openChat(gid, date, focus) {
+    Object.assign(chat, { gid, date: date || todayStr(), focus: focus || [], data: null, error: null, role: "all" });
+    ui.page = "chat"; ui.q = ""; $("#q").value = "";
+    if (current) closePeek();
+    render();
+    loadChat();
+  }
+  async function loadChat(force) {
+    if (!API) { chat.error = "单文件模式不能查看完整聊天记录，请在服务模式（aes serve）下使用"; return render(); }
+    const seq = ++chat.seq;
+    chat.loading = true; chat.error = null;
+    if (ui.page === "chat") renderChat();
+    try {
+      const r = await fetch(`api/groups/${encodeURIComponent(chat.gid)}/messages?date=${chat.date}${force ? "&_=" + Date.now() : ""}`, { cache: "no-store" });
+      const body = await r.json().catch(() => ({}));
+      if (seq !== chat.seq) return;
+      if (!r.ok) throw new Error(body.error || r.status);
+      chat.data = body;
+    } catch (err) { if (seq === chat.seq) { chat.error = err.message; chat.data = null; } }
+    if (seq !== chat.seq) return;
+    chat.loading = false;
+    if (ui.page === "chat") { render(); scrollToFocus(); }
+  }
+  function scrollToFocus() {
+    if (!chat.focus.length) return;
+    const el = document.querySelector(`.cmsg[data-mid="${CSS.escape(chat.focus[0])}"]`);
+    if (el) { el.scrollIntoView({ block: "center" }); chat.focus.forEach(id => { const x = document.querySelector(`.cmsg[data-mid="${CSS.escape(id)}"]`); if (x) x.classList.add("flash"); }); }
+    chat.focus = [];
+  }
+  function chatFiltered() {
+    const msgs = (chat.data && chat.data.messages) || [];
+    const words = ui.q.toLowerCase().split(/\s+/).filter(Boolean);
+    const ev = chat.data ? chat.data.evidence || {} : {};
+    return msgs.filter(m => (chat.role === "all" || (chat.role === "ev" ? !!ev[m.id] : m.role === chat.role)) &&
+      (!words.length || words.every(w => (m.content + " " + m.sender).toLowerCase().includes(w))));
+  }
+  function renderChatBar() {
+    const d = chat.data;
+    const n = d ? chatFiltered().length : 0;
+    const evn = d ? Object.keys(d.evidence || {}).filter(id => d.messages.some(m => m.id === id)).length : 0;
+    $("#filterbar").innerHTML = `
+      <button class="icon-btn" data-chat-day="-1" title="前一天" aria-label="前一天" style="transform:rotate(180deg)">${I.chevR}</button>
+      <input type="date" class="cbar-date" id="chat-date" value="${esc(chat.date)}" max="${esc(todayStr())}" aria-label="日期">
+      <button class="icon-btn" data-chat-day="1" title="后一天" aria-label="后一天" ${chat.date >= todayStr() ? "disabled" : ""}>${I.chevR}</button>
+      ${chat.date !== todayStr() ? `<button class="fadd" data-chat-today>今天</button>` : ""}
+      <span class="gseg" style="margin-left:6px">${[["all", "全部"], ["客户", "客户"], ["内部", "内部"], ["ev", `事件证据 ${evn}`]].map(([k, l]) => `<button data-chat-role="${k}" aria-pressed="${chat.role === k}">${l}</button>`).join("")}</span>
+      <button class="fadd" data-chat-events>${I.stack}<span>该群事件</span></button>
+      <span class="stats"><span>${chat.loading ? "正在从数据源获取…" : d ? `${ui.q || chat.role !== "all" ? `${n} / ` : ""}<b>${d.total}</b> 条 · ${d.source === "live" ? "实时获取" : "已保存数据"} ${esc(fmtFull(d.fetched_at).slice(11))}` : ""}</span>
+        <button class="fadd" data-chat-refresh title="重新获取">刷新</button></span>`;
+  }
+  function linkify(escaped) {
+    return escaped.replace(/https?:\/\/[^\s<>"']+/g, u => `<a href="${u}" target="_blank" rel="noopener noreferrer">${u}</a>`);
+  }
+  function hl(escaped) {
+    const words = ui.q.split(/\s+/).filter(Boolean).map(w => esc(w).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    return words.length ? escaped.replace(new RegExp(`(${words.join("|")})(?![^<]*>)`, "gi"), "<mark>$1</mark>") : escaped;
+  }
+  function renderChat() {
+    order = [];
+    const box = $("#content");
+    if (chat.error) { box.innerHTML = `<div class="empty"><div class="muted">${I.msg}</div><h3>获取失败</h3><p>${esc(chat.error)}</p>${API ? `<button class="btn" data-chat-refresh>重试</button>` : ""}</div>`; return; }
+    if (!chat.data) { box.innerHTML = `<div class="empty"><div class="muted">${I.msg}</div><h3>正在从数据源获取聊天记录…</h3><p>实时请求，不在服务器存储，通常需要几秒。</p></div>`; return; }
+    const list = chatFiltered();
+    if (!chat.data.total) { box.innerHTML = `<div class="empty"><div class="muted">${I.msg}</div><h3>${esc(chat.date)} 这个群没有消息</h3><p>换一天看看。</p></div>`; return; }
+    if (!list.length) { box.innerHTML = `<div class="empty"><div class="muted">${I.search}</div><h3>没有符合条件的消息</h3></div>`; return; }
+    const ev = chat.data.evidence || {};
+    let prev = null;
+    box.innerHTML = `<div class="chat"><div class="cday">${esc(chat.date)} · ${list.length} 条</div>` + list.map(m => {
+      const cont = prev && prev.sender === m.sender && (parseT(m.t) - parseT(prev.t)) < 5 * 60e3 && !ev[m.id] && !ev[prev.id];
+      prev = m;
+      const refs = ev[m.id] || [];
+      const body = m.image ? `<span class="img">[图片]</span>${m.content && m.content !== "[图片]" ? " " + linkify(hl(esc(m.content))) : ""}` : linkify(hl(esc(m.content)));
+      return `<div class="cmsg${cont ? " cont" : ""}${refs.length ? " ev" : ""}" data-mid="${esc(m.id)}">${avatar(m.sender)}
+        <div class="cb">${cont ? "" : `<div class="ch"><b>${hl(esc(m.sender))}</b><span class="role${m.role === "内部" ? " in" : ""}">${esc(m.role)}</span><span>${esc(fmtFull(m.t).slice(11))}</span><span class="code">#${esc(m.id)}</span></div>`}
+          <div class="cc">${body}</div>
+          ${refs.length ? `<div class="cev">${refs.map(x => `<button data-open-event="${esc(x.event_id)}">${dot(x.type)}${esc(x.type)} · ${esc(x.title)}</button>`).join("")}</div>` : ""}
+        </div></div>`;
+    }).join("") + `</div>`;
+  }
+
   function nextRun() {
-    const d = new Date(); d.setMinutes(0, 0, 0); d.setHours(d.getHours() + 1);
-    return `${p2(d.getHours())}:00 左右`;
+    const w = wall(new Date(Date.now() + 36e5).toISOString());
+    return w ? `${p2(w.h)}:00 左右` : "下个整点";
   }
   function renderSettings() {
     order = [];
@@ -791,7 +931,7 @@ svg { display: block; flex: none; }
           <h1>${esc(e.title)}</h1>
           <p class="psum">${esc(e.summary)}</p>
           ${attrs.length ? `<div class="psec"><h4>属性<span class="n">${attrs.length}</span></h4><dl class="attrs">${attrs.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl></div>` : ""}
-          <div class="psec"><h4>证据消息<span class="n">${msgs.length}</span></h4>
+          <div class="psec"><h4>证据消息<span class="n">${msgs.length}</span>${API ? `<span class="spacer"></span><button class="btn ghost" data-chat-event="${esc(e.event_id)}" style="height:24px;color:var(--accent);font-weight:400">${I.msg}查看完整对话</button>` : ""}</h4>
             ${hasMsgs ? `<div class="tl">${msgs.map(([id, m]) => m ? `
               <div class="tl-item">${avatar(m.sender)}<div class="tl-body">
                 <div class="tl-head"><b>${esc(m.sender)}</b><span>${esc(m.role)}</span><span>·</span><span title="${esc(fmtFull(m.t))}">${esc(fmtFull(m.t).slice(5))}</span><span class="code">#${esc(id)}</span></div>
@@ -814,7 +954,7 @@ svg { display: block; flex: none; }
           ${edits[current] ? `<div class="prop"><span></span><button class="btn ghost" id="peek-revert" style="justify-content:flex-start;color:var(--muted)">恢复为模型原始值</button></div>` : ""}
           <div class="pdiv"></div>
           <div class="prop"><span>推送</span><span class="pval">${esc(PUSH()[e.type] || "-")}</span></div>
-          <div class="prop" style="align-items:start"><span>客户群</span><span class="pval">${esc(gname(e))}${(() => { const g = GBY[e.group_number]; return g ? `<br><span class="muted" style="font-size:12px">${g.messages != null ? `${g.messages} 条消息 · ` : ""}未关闭事件 ${g.open} / ${g.total}</span><br><button class="btn ghost" data-jump-group="${esc(e.group_number)}" style="padding:0;height:22px;color:var(--accent)">查看该群全部事件</button>` : ""; })()}</span></div>
+          <div class="prop" style="align-items:start"><span>客户群</span><span class="pval">${esc(gname(e))}${(() => { const g = GBY[e.group_number]; return g ? `<br><span class="muted" style="font-size:12px">${g.messages != null ? `${g.messages} 条消息 · ` : ""}未关闭事件 ${g.open} / ${g.total}</span><br><button class="btn ghost" data-jump-group="${esc(e.group_number)}" style="padding:0;height:22px;color:var(--accent)">查看该群全部事件</button>${API ? `<br><button class="btn ghost" data-chat-event="${esc(e.event_id)}" style="padding:0;height:22px;color:var(--accent)">查看聊天记录</button>` : ""}` : ""; })()}</span></div>
           ${e.customer_uid ? `<div class="prop"><span>客户 UID</span><span class="pval">${esc(e.customer_uid)}</span></div>` : ""}
           <div class="prop"><span>首次消息</span><span class="pval">${esc(fmtFull(e.start_time))}</span></div>
           <div class="prop"><span>最近消息</span><span class="pval${isStale(e) ? "" : ""}" style="${isStale(e) ? "color:var(--warn)" : ""}">${esc(fmtFull(e.end_time))}${isStale(e) ? `<br><span style="font-size:12px">${esc(ago(e.end_time))}，超过 24 小时</span>` : ""}</span></div>
@@ -1045,7 +1185,7 @@ svg { display: block; flex: none; }
       if (!r.ok) throw new Error(r.status);
       const nd = await r.json();
       const live = $("#live");
-      const editing = ui.page === "settings" && document.activeElement && /SELECT|INPUT/.test(document.activeElement.tagName);
+      const editing = (ui.page === "settings" || ui.page === "chat") && document.activeElement && /SELECT|INPUT/.test(document.activeElement.tagName);
       if (editing) return;
       if (nd.version !== D.version || JSON.stringify(nd.model_settings) !== JSON.stringify(D.model_settings) || JSON.stringify(nd.sync) !== JSON.stringify(D.sync)) {
         D = nd; edits = nd.edits || {}; history = nd.history || {};
@@ -1073,7 +1213,7 @@ svg { display: block; flex: none; }
   $("#layout-seg").addEventListener("click", ev => { const b = ev.target.closest("[data-layout]"); if (b) { ui.layout = b.dataset.layout; render(); } });
   $("#btn-display").addEventListener("click", ev => { if (pop.open && pop.anchor === ev.currentTarget) return closeMenu(); displayPanel(ev.currentTarget); });
   $("#q").addEventListener("input", ev => { ui.q = ev.target.value.trim(); render(); });
-  const setPlaceholder = () => { $("#q").placeholder = ui.page === "groups" ? "搜索客户群" : "搜索事件"; };
+  const setPlaceholder = () => { $("#q").placeholder = ui.page === "groups" ? "搜索客户群" : ui.page === "chat" ? "搜索消息内容或发送人" : "搜索事件"; };
   $("#q").addEventListener("keydown", ev => { if (ev.key === "Escape") { ev.target.value = ""; ui.q = ""; ev.target.blur(); render(); } if (ev.key === "Enter" || ev.key === "ArrowDown") { ev.preventDefault(); ev.target.blur(); move(1); } });
   $("#filterbar").addEventListener("change", ev => { if (ev.target.id === "gsort") { ui.gsort = ev.target.value; render(); } });
   $("#filterbar").addEventListener("click", ev => {
@@ -1138,6 +1278,34 @@ svg { display: block; flex: none; }
     if (!field) return;
     const v = col.dataset.value;
     setField(dragId, field, field === "owner" && v === NONE ? null : v);
+  });
+
+  function chatForEvent(id) {
+    const e = BY_ID[id];
+    if (e) openChat(e.group_number, String(e.start_time).slice(0, 10), e.evidence_msg_ids);
+  }
+  // 聊天记录相关的点击：可能出现在内容区、筛选栏、详情面板、顶栏
+  document.addEventListener("click", ev => {
+    const t = ev.target;
+    const cg = t.closest("[data-chat-gid]");
+    if (cg) { ev.stopPropagation(); return openChat(cg.dataset.chatGid, todayStr()); }
+    const ce = t.closest("[data-chat-event]");
+    if (ce) { ev.stopPropagation(); return chatForEvent(ce.dataset.chatEvent); }
+    const oe = t.closest("[data-open-event]");
+    if (oe) { ev.stopPropagation(); return openPeek(oe.dataset.openEvent); }
+    const pg = t.closest("[data-page-go]");
+    if (pg) { ui.page = pg.dataset.pageGo; return render(); }
+    if (ui.page !== "chat") return;
+    const dd = t.closest("[data-chat-day]");
+    if (dd && !dd.disabled) { chat.date = shiftDate(chat.date, +dd.dataset.chatDay); chat.data = null; render(); return loadChat(); }
+    if (t.closest("[data-chat-today]")) { chat.date = todayStr(); chat.data = null; render(); return loadChat(); }
+    if (t.closest("[data-chat-refresh]")) return loadChat(true);
+    const rl = t.closest("[data-chat-role]");
+    if (rl) { chat.role = rl.dataset.chatRole; return render(); }
+    if (t.closest("[data-chat-events]")) { ui.page = "events"; ui.view = "all"; ui.f = { group: [chat.gid] }; return render(); }
+  }, true);
+  $("#filterbar").addEventListener("change", ev => {
+    if (ev.target.id === "chat-date" && ev.target.value) { chat.date = ev.target.value > todayStr() ? todayStr() : ev.target.value; chat.data = null; render(); loadChat(); }
   });
 
   $("#peek").addEventListener("click", ev => {
