@@ -160,3 +160,39 @@ def test_sync_fetch_failure_uses_saved_file(settings, tmp_path, monkeypatch):
     s = Sync(settings, extractor=CountingExtractor(), fetch_fn=failing, now=lambda: datetime(2026, 11, 12, 10, 0))
     st = s.run(uid="0")
     assert not st["ok"] and "403" in st["errors"][0] and st["events"] == 4
+
+
+def test_runtime_model_override_and_cache_survives_model_change(settings, tmp_path, monkeypatch):
+    from aftersales_events.config import apply_runtime, load_settings
+
+    monkeypatch.setenv("AES_LLM_PROVIDER", "deepseek")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test")
+    s1 = load_settings(ROOT / "config")
+    st = make_sync(s1, tmp_path, monkeypatch, CountingExtractor()).run(uid="0")
+    assert st["llm"] == {"provider": "deepseek", "model": "deepseek-chat", "override": None}
+
+    (tmp_path / "data" / "runtime_settings.json").write_text(json.dumps({"llm": {"model": "deepseek-v4.1-flash"}}))
+    s2 = load_settings(ROOT / "config")
+    assert apply_runtime(s2, tmp_path / "data" / "runtime_settings.json") == "deepseek-v4.1-flash"
+    assert s2.section("llm")["deepseek"]["model"] == "deepseek-v4.1-flash"
+
+    ex = CountingExtractor()
+    sync = make_sync(load_settings(ROOT / "config"), tmp_path, monkeypatch, ex)
+    sync.runtime_model = apply_runtime(sync.settings, tmp_path / "data" / "runtime_settings.json")
+    st2 = sync.run(uid="0")
+    # 换模型后已处理的对话不重跑
+    assert ex.calls == 0 and st2["cached"] == 3 and st2["llm"]["model"] == "deepseek-v4.1-flash"
+    assert st2["llm"]["override"] == "deepseek-v4.1-flash"
+
+
+def test_legacy_cache_keys_are_migrated(settings, tmp_path, monkeypatch):
+    from aftersales_events import sync as sync_mod
+
+    # 模拟旧版本：指纹里含模型名
+    legacy = sync_mod.model_tag(settings)
+    monkeypatch.setattr(sync_mod, "cache_tag", lambda s: legacy)
+    make_sync(settings, tmp_path, monkeypatch, CountingExtractor()).run(uid="0")
+    monkeypatch.undo()
+    ex = CountingExtractor()
+    st = make_sync(settings, tmp_path, monkeypatch, ex).run(uid="0")
+    assert ex.calls == 0 and st["cached"] == 3 and st["events"] == 4

@@ -19,7 +19,10 @@ def server(raw, settings, tmp_path):
     run(raw, settings, FakeExtractor(), out_dir=tmp_path / "out" / "run1")
     (tmp_path / "raw").mkdir()
     shutil.copy(ROOT / "tests" / "fixtures" / "sample_response.json", tmp_path / "raw" / "a.json")
-    app = BoardApp(settings, tmp_path / "out", tmp_path / "raw", tmp_path / "state.json")
+    (tmp_path / "sync_status.json").write_text(json.dumps({"llm": {"provider": "deepseek", "model": "deepseek-v4-pro"},
+                                                         "available_models": ["deepseek-v4-pro", "deepseek-v4.1-flash"]}))
+    app = BoardApp(settings, tmp_path / "out", tmp_path / "raw", tmp_path / "state.json",
+                   sync_status=tmp_path / "sync_status.json", runtime_path=tmp_path / "runtime.json")
     srv = make_server(app, "127.0.0.1", 0)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     yield f"http://127.0.0.1:{srv.server_address[1]}", app, tmp_path
@@ -51,7 +54,8 @@ def test_page_and_data(server):
     groups = {g["id"]: g for g in data["groups"]}
     assert groups["R:1001"]["messages"] == 7 and groups["R:1001"]["inner"] == 3 and groups["R:1001"]["senders"] == 3
     assert groups["R:1002"]["name"] == "示例客户&支持团队-1380000002" and groups["R:1002"]["uid"] == "1380000002"
-    assert data["sync"] is None
+    assert data["sync"]["llm"]["model"] == "deepseek-v4-pro"
+    assert data["model_settings"]["in_use"] == "deepseek-v4-pro" and data["model_settings"]["selected"] is None
     assert req(base + "/healthz") == (200, "ok")
     assert req(base + "/nope")[0] == 404
 
@@ -84,3 +88,18 @@ def test_rejects_bad_requests(server):
     assert req(f"{base}/api/events/{eid}", {"owner": "x" * 41})[0] == 400
     assert req(f"{base}/api/events/{eid}", {"status": "已关闭"}, ctype="text/plain")[0] == 415
     assert req(f"{base}/api/events/evt_missing", {"status": "已关闭"})[0] == 404
+
+
+def test_model_settings(server):
+    base, app, tmp = server
+    code, body = req(base + "/api/settings", {"model": "deepseek-v4.1-flash"}, user="bob")
+    res = json.loads(body)
+    assert code == 200 and res["selected"] == "deepseek-v4.1-flash" and res["history"][-1]["by"] == "bob"
+    assert json.loads((tmp / "runtime.json").read_text())["llm"]["model"] == "deepseek-v4.1-flash"
+    assert req(base + "/api/settings", {"model": "gpt-x"})[0] == 400          # 网关上没有
+    assert req(base + "/api/settings", {"model": "bad name;rm"})[0] == 400    # 格式不对
+    assert req(base + "/api/settings", {"nope": 1})[0] == 400
+    assert req(base + "/api/settings", {"model": "x"}, ctype="text/plain")[0] == 415
+    res = json.loads(req(base + "/api/settings", {"model": None})[1])
+    assert res["selected"] is None and len(res["history"]) == 2
+    assert json.loads(req(base + "/api/settings")[1])["provider"] == "deepseek"

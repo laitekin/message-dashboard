@@ -4,6 +4,8 @@
     GET  /api/data                  看板数据（页面每 20 秒轮询一次，同步其他人的修改）
     POST /api/events/<id>           修改 status / level / type / owner，body 为 JSON
     POST /api/events/<id>/revert    恢复为模型原始输出
+    GET  /api/settings              模型设置（当前使用、已选择、可用模型、修改记录）
+    POST /api/settings              {"model": "..."} 选择抽取模型，下一次 aes sync 生效；null 恢复默认
     GET  /healthz
 
 人工修改单独保存在 state 文件（JSON）里，不改动 events.jsonl，并记录谁在什么时候改了什么。
@@ -25,7 +27,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from .board import LEVELS, STATUSES, build_payload, find_event_files, load_events, render_html
-from .config import Settings
+from .config import MODEL_RE, Settings, load_runtime
 from .fetch import load_raw
 from .models import Event, Message
 from .preprocess import preprocess
@@ -101,13 +103,16 @@ class BoardState:
 
 class BoardApp:
     def __init__(self, settings: Settings, out_dir: str | Path, raw_dir: str | Path | None, state_path: str | Path,
-                 title: str = "售后事件看板", sync_status: str | Path | None = None):
+                 title: str = "售后事件看板", sync_status: str | Path | None = None,
+                 runtime_path: str | Path | None = None):
         self.settings = settings
         self.out_dir = Path(out_dir)
         self.raw_dir = Path(raw_dir) if raw_dir else None
         self.state = BoardState(state_path)
         self.title = title
         self.sync_status = Path(sync_status) if sync_status else None
+        self.runtime_path = Path(runtime_path) if runtime_path else None
+        self._rt_lock = threading.Lock()
         self._msg_lock = threading.Lock()
         self._msg_key: tuple = ()
         self._msgs: list[Message] = []
@@ -142,10 +147,51 @@ class BoardApp:
         except (OSError, json.JSONDecodeError):
             return None
 
+    def model_settings(self) -> dict:
+        """模型设置：provider 和实际使用的模型以最近一次 sync 为准（看板服务本身不持有 API key）。"""
+        sync = self.sync_info() or {}
+        llm = sync.get("llm") or {}
+        rt = load_runtime(self.runtime_path) if self.runtime_path else {}
+        return {
+            "editable": self.runtime_path is not None,
+            "provider": llm.get("provider"),
+            "in_use": llm.get("model"),
+            "selected": (rt.get("llm") or {}).get("model"),
+            "available": sync.get("available_models") or [],
+            "history": rt.get("history", [])[-20:],
+            "updated_at": rt.get("updated_at"),
+            "updated_by": rt.get("updated_by"),
+        }
+
+    def set_model(self, model: object, user: str) -> dict:
+        if not self.runtime_path:
+            raise ValueError("未配置运行时设置文件，无法修改")
+        if model is not None and not (isinstance(model, str) and re.fullmatch(MODEL_RE, model.strip())):
+            raise ValueError("模型名格式不正确")
+        model = model.strip() if model else None
+        available = (self.sync_info() or {}).get("available_models") or []
+        if model and available and model not in available:
+            raise ValueError(f"网关上没有模型 {model}")
+        with self._rt_lock:
+            rt = load_runtime(self.runtime_path)
+            before = (rt.get("llm") or {}).get("model")
+            if model != before:
+                now = datetime.now().isoformat(timespec="seconds")
+                rt.setdefault("llm", {})["model"] = model
+                rt["history"] = (rt.get("history", []) + [{"at": now, "by": user, "field": "model", "from": before, "to": model}])[-MAX_HISTORY:]
+                rt["updated_at"], rt["updated_by"] = now, user
+                self.runtime_path.parent.mkdir(parents=True, exist_ok=True)
+                tmp = self.runtime_path.with_name(self.runtime_path.name + ".tmp")
+                tmp.write_text(json.dumps(rt, ensure_ascii=False, indent=1), encoding="utf-8")
+                os.replace(tmp, self.runtime_path)
+        return self.model_settings()
+
     def payload(self, user: str | None = None) -> dict:
         st = self.state.snapshot()
-        return build_payload(self.events(), self.settings.enabled_types, self.messages(), self.title,
-                             edits=st["edits"], history=st["history"], api=True, user=user, sync=self.sync_info())
+        p = build_payload(self.events(), self.settings.enabled_types, self.messages(), self.title,
+                          edits=st["edits"], history=st["history"], api=True, user=user, sync=self.sync_info())
+        p["model_settings"] = self.model_settings()
+        return p
 
     def validate(self, patch: object, events: list[Event]) -> dict:
         if not isinstance(patch, dict) or not patch:
@@ -198,25 +244,46 @@ def make_handler(app: BoardApp):
                 self._send(200, render_html(app.payload(self._user())).encode(), "text/html; charset=utf-8")
             elif path == "/api/data":
                 self._json(200, app.payload(self._user()))
+            elif path == "/api/settings":
+                self._json(200, app.model_settings())
             elif path == "/healthz":
                 self._send(200, b"ok", "text/plain; charset=utf-8")
             else:
                 self._json(404, {"error": "not found"})
 
-        def do_POST(self):
-            m = re.fullmatch(r"/api/events/([\w-]+)(/revert)?", urlsplit(self.path).path)
-            if not m:
-                return self._json(404, {"error": "not found"})
+        def _read_json(self):
             # 只接受 JSON：跨站表单无法在不触发预检的情况下发送 application/json
             if "application/json" not in (self.headers.get("Content-Type") or ""):
-                return self._json(415, {"error": "需要 Content-Type: application/json"})
+                self._json(415, {"error": "需要 Content-Type: application/json"})
+                return None
             length = int(self.headers.get("Content-Length") or 0)
             if length > MAX_BODY:
-                return self._json(413, {"error": "请求体过大"})
+                self._json(413, {"error": "请求体过大"})
+                return None
             try:
-                body = json.loads(self.rfile.read(length) or b"{}")
+                return json.loads(self.rfile.read(length) or b"{}")
             except json.JSONDecodeError:
-                return self._json(400, {"error": "JSON 格式错误"})
+                self._json(400, {"error": "JSON 格式错误"})
+                return None
+
+        def do_POST(self):
+            path = urlsplit(self.path).path
+            if path == "/api/settings":
+                body = self._read_json()
+                if body is None:
+                    return
+                if not isinstance(body, dict) or "model" not in body:
+                    return self._json(400, {"error": "需要 model 字段"})
+                try:
+                    return self._json(200, app.set_model(body["model"], self._user()))
+                except ValueError as e:
+                    return self._json(400, {"error": str(e)})
+            m = re.fullmatch(r"/api/events/([\w-]+)(/revert)?", path)
+            if not m:
+                return self._json(404, {"error": "not found"})
+            body = self._read_json()
+            if body is None:
+                return
             events = app.events()
             event = next((e for e in events if e.event_id == m.group(1)), None)
             if event is None:

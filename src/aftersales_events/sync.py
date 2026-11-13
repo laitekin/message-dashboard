@@ -50,18 +50,34 @@ def fingerprint(w: Window, model_tag: str) -> str:
     return h.hexdigest()[:20]
 
 
-def model_tag(settings: Settings) -> str:
+def active_model(settings: Settings) -> tuple[str, str | None]:
     llm = settings.section("llm")
     provider = llm.get("provider", "claude")
-    model = llm.get("model") if provider == "claude" else (llm.get(provider) or {}).get("model")
-    privacy = settings.section("privacy")
-    return f"{provider}:{model}:names={privacy.get('pseudonymize_names', True)}"
+    return provider, (llm.get("model") if provider == "claude" else (llm.get(provider) or {}).get("model"))
+
+
+def model_tag(settings: Settings) -> str:
+    """旧版缓存指纹包含模型名；只用于把旧缓存迁移到新指纹。"""
+    provider, model = active_model(settings)
+    return f"{provider}:{model}:{cache_tag(settings)}"
+
+
+def cache_tag(settings: Settings) -> str:
+    """缓存指纹不含模型名：换模型只影响之后新增或变化的对话，已处理的不重跑（需要时用 --reprocess）。"""
+    return f"names={settings.section('privacy').get('pseudonymize_names', True)}"
 
 
 class Sync:
     def __init__(self, settings: Settings, extractor: Extractor | None = None,
-                 fetch_fn: Callable = fetch, now: Callable[[], datetime] = datetime.now):
+                 fetch_fn: Callable = fetch, now: Callable[[], datetime] = datetime.now,
+                 runtime_path: str | Path | None = None, list_models_fn: Callable | None = None):
+        from .config import apply_runtime
+        from .extract import list_models
+
         self.settings = settings
+        # 看板「设置」页选择的模型优先
+        self.runtime_model = apply_runtime(settings, runtime_path) if runtime_path else None
+        self.list_models_fn = list_models_fn or list_models
         self.cfg = settings.section("sync")
         self.fetch_cfg = settings.section("fetch")
         self.extractor = extractor
@@ -130,8 +146,17 @@ class Sync:
             windows_by_day[d] = segment(msgs, self.settings.section("segment"))
 
         # 3. 只抽取缓存里没有的窗口
-        tag = model_tag(self.settings)
+        tag = cache_tag(self.settings)
+        legacy = model_tag(self.settings)
         keyed = {d: [(fingerprint(w, tag), w) for w in ws] for d, ws in windows_by_day.items()}
+        for pairs in keyed.values():
+            for key, w in pairs:  # 兼容旧版（指纹含模型名）的缓存
+                new, old = self._cache_path(key), self._cache_path(fingerprint(w, legacy))
+                if not new.exists() and old.exists():
+                    new.parent.mkdir(parents=True, exist_ok=True)
+                    os.replace(old, new)
+        provider, model = active_model(self.settings)
+        status["llm"] = {"provider": provider, "model": model, "override": self.runtime_model}
         todo: dict[str, Window] = {}
         for pairs in keyed.values():
             for key, w in pairs:
@@ -141,7 +166,8 @@ class Sync:
         ordered = sorted(todo.items(), key=lambda kv: kv[1].end, reverse=True)
         run_now, deferred = ordered[:max_windows], ordered[max_windows:]
         status.update(windows=sum(len(v) for v in keyed.values()), cached=sum(len(v) for v in keyed.values()) - len(todo),
-                      to_extract=len(todo), deferred=len(deferred), extracted=0, failed=0, model=tag)
+                      to_extract=len(todo), deferred=len(deferred), extracted=0, failed=0,
+                      max_windows=max_windows, available_models=self.list_models_fn(self.settings.section("llm")))
 
         if run_now:
             if self.extractor is None:
@@ -157,7 +183,7 @@ class Sync:
                 except Exception as e:  # 单个窗口失败不影响整体，下次重试
                     log.error("window %s 抽取失败：%s", w.window_id, e)
                     return False
-                self._save_cache(key, w, events, tag)
+                self._save_cache(key, w, events, f"{provider}:{model}")
                 return True
 
             with ThreadPoolExecutor(max_workers=max(1, int(self.settings.section("llm").get("concurrency", 4)))) as pool:
@@ -220,7 +246,7 @@ class Sync:
         return {"cache": removed_cache, "raw": removed_raw}
 
 
-def run_locked(settings: Settings, lock_path: str | Path, **kwargs) -> dict:
+def run_locked(settings: Settings, lock_path: str | Path, runtime_path: str | Path | None = None, **kwargs) -> dict:
     """同一时间只允许一个 sync 运行（上一次还没跑完时直接跳过）。"""
     lock_path = Path(lock_path)
     lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -230,4 +256,4 @@ def run_locked(settings: Settings, lock_path: str | Path, **kwargs) -> dict:
         except BlockingIOError:
             log.warning("上一次 sync 还在运行，跳过本次")
             return {"skipped": True}
-        return Sync(settings).run(**kwargs)
+        return Sync(settings, runtime_path=runtime_path).run(**kwargs)

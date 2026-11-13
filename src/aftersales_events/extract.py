@@ -271,6 +271,28 @@ class OpenAICompatExtractor:
         return self.parse((choice.get("message") or {}).get("content") or "", window.window_id)
 
 
+def list_models(cfg: dict[str, Any], timeout: float = 15) -> list[str]:
+    """查询当前 provider 可用的模型（OpenAI 兼容接口的 GET /models）。失败返回空列表。"""
+    import os
+    import urllib.request
+
+    provider = (cfg.get("provider") or "claude").lower()
+    if provider == "claude":
+        return []
+    base = ((cfg.get(provider) or {}).get("base_url") or "").rstrip("/")
+    key = os.environ.get(f"{provider.upper()}_API_KEY", "")
+    if not base or not key:
+        return []
+    req = urllib.request.Request(f"{base}/models", headers={"Authorization": f"Bearer {key}"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read() or b"{}")
+    except Exception as e:  # 查询失败不影响抽取
+        log.warning("查询可用模型失败：%s", e)
+        return []
+    return sorted({m.get("id") for m in data.get("data", []) if isinstance(m, dict) and m.get("id")})
+
+
 PROVIDERS = ("claude", "deepseek")
 
 

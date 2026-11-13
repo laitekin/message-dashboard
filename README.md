@@ -120,6 +120,8 @@ aes board out/ --input data/raw/1380000001_2026-11-10_2026-11-12.json --out out/
 | `claude`（默认） | Anthropic Python SDK 结构化输出（`messages.parse` + Pydantic），默认 `claude-opus-5-5`、effort `medium`，system prompt 缓存，默认开启服务端拒答回退 | `ANTHROPIC_API_KEY` |
 | `deepseek` | OpenAI 兼容的 `/chat/completions`（只用标准库），JSON 模式 + 提示词里的格式说明，逐个校验事件，429/5xx/超时自动重试 | `DEEPSEEK_API_KEY`，可选 `DEEPSEEK_BASE_URL` |
 
+在看板的「设置」页可以直接切换模型：列表来自网关的 `/models`（每次 `aes sync` 时查询），选择保存在 `data/runtime_settings.json`，并记录修改人和时间。下一次 `aes sync` 生效，优先级高于 `AES_MODEL`；选「默认」就恢复用服务器配置。换模型只影响之后新出现或有新消息的对话，缓存指纹不含模型名，已经处理过的对话不会重跑。需要全部重跑时用 `aes sync --reprocess`。
+
 `AES_MODEL` 作用于当前选中的 provider，例如：
 
 ```bash

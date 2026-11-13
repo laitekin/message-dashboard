@@ -59,7 +59,7 @@ def cmd_run(args, settings) -> None:
 def cmd_sync(args, settings) -> None:
     from .sync import run_locked
 
-    status = run_locked(settings, args.lock, uid=args.uid, days=args.days, reprocess=args.reprocess,
+    status = run_locked(settings, args.lock, runtime_path=args.runtime, uid=args.uid, days=args.days, reprocess=args.reprocess,
                         max_windows=args.max_windows, skip_fetch=args.no_fetch)
     print(json.dumps(status, ensure_ascii=False, indent=2))
     if not status.get("skipped") and not status.get("ok"):
@@ -93,7 +93,8 @@ def cmd_board(args, settings) -> None:
 def cmd_serve(args, settings) -> None:
     from .serve import BoardApp, make_server
 
-    app = BoardApp(settings, args.out_dir, args.raw_dir, args.state, title=args.title, sync_status=args.sync_status)
+    app = BoardApp(settings, args.out_dir, args.raw_dir, args.state, title=args.title, sync_status=args.sync_status,
+                   runtime_path=args.runtime)
     server = make_server(app, args.host, args.port)
     print(f"看板服务已启动：http://{args.host}:{server.server_address[1]}/（事件目录 {args.out_dir}，修改记录 {args.state}）")
     try:
@@ -138,6 +139,7 @@ def main(argv: list[str] | None = None) -> None:
     sp.add_argument("--reprocess", action="store_true", help="忽略缓存全部重新抽取（改了 prompt 或事件定义后使用）")
     sp.add_argument("--no-fetch", action="store_true", help="不拉取，只用已保存的原始文件")
     sp.add_argument("--lock", default="data/sync.lock")
+    sp.add_argument("--runtime", default="data/runtime_settings.json", help="看板「设置」页保存的模型选择（优先于 AES_MODEL）")
     sp.set_defaults(func=cmd_sync)
 
     sp = sub.add_parser("eval", help="与人工标注对比")
@@ -160,6 +162,7 @@ def main(argv: list[str] | None = None) -> None:
     sp.add_argument("--port", type=int, default=8470)
     sp.add_argument("--title", default="售后事件看板")
     sp.add_argument("--sync-status", default="data/sync_status.json", help="aes sync 写出的状态文件，用于在看板上显示同步情况")
+    sp.add_argument("--runtime", default="data/runtime_settings.json", help="「设置」页保存模型选择的位置（aes sync 读取）")
     sp.set_defaults(func=cmd_serve)
 
     args = p.parse_args(argv)

@@ -164,6 +164,24 @@ svg { display: block; flex: none; }
 .gseg button[aria-pressed="true"] { background: var(--active); color: var(--text); }
 .gsort { height: 24px; border: 1px solid var(--border-2); border-radius: 6px; background: var(--bg); font-size: 12px; padding: 0 4px; }
 
+/* ---------------------------------------------------------------- settings */
+.settings { max-width: 720px; margin: 0 auto; padding: 32px 24px 60px; }
+.settings h2 { font-size: 16px; margin: 0 0 4px; font-weight: 600; }
+.settings h2:not(:first-child) { margin-top: 36px; }
+.settings .desc { color: var(--muted); margin: 0 0 14px; }
+.scard { border: 1px solid var(--border-2); border-radius: 10px; background: var(--panel); }
+.srow { display: flex; align-items: center; gap: 16px; padding: 12px 16px; border-bottom: 1px solid var(--border); min-height: 52px; }
+.srow:last-child { border-bottom: 0; }
+.srow > .k { width: 120px; flex: none; color: var(--muted); }
+.srow > .v { flex: 1; min-width: 0; word-break: break-word; }
+.srow select, .srow input[type=text] { height: 30px; border: 1px solid var(--border-2); border-radius: 6px; background: var(--bg); padding: 0 8px; min-width: 220px; max-width: 100%; }
+.pill { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 12px; }
+.pill.warn { background: rgba(229,168,58,.15); color: var(--warn); }
+.pill.bad { background: rgba(242,85,90,.12); color: var(--urgent); }
+.slog { list-style: none; margin: 8px 0 0; padding: 0; }
+.slog li { padding: 6px 0; color: var(--muted); font-size: 12px; border-bottom: 1px dashed var(--border); }
+.slog li b { color: var(--text-2); font-weight: 500; }
+
 /* ---------------------------------------------------------------- board */
 .kanban { display: flex; gap: 10px; padding: 12px 18px 18px; height: 100%; align-items: flex-start; min-width: min-content; }
 .kcol { width: 300px; flex: none; display: flex; flex-direction: column; max-height: 100%; border-radius: 8px; }
@@ -294,6 +312,8 @@ svg { display: block; flex: none; }
       <nav id="nav-types"></nav>
       <div class="nav-sec">客户群</div>
       <nav id="nav-groups"></nav>
+      <div class="nav-sec">系统</div>
+      <nav id="nav-system"></nav>
     </div>
     <div class="side-foot"><span class="sync" id="sync"></span><span class="sync" id="pipeline"></span></div>
   </aside>
@@ -352,6 +372,7 @@ svg { display: block; flex: none; }
     down: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6 4 4 4-4"/></svg>',
     check: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3.5 8.5 3 3 6-7"/></svg>',
     menu: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg>',
+    gear: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.6M8 12.6v1.6M14.2 8h-1.6M3.4 8H1.8M12.4 3.6l-1.1 1.1M4.7 11.3l-1.1 1.1M12.4 12.4l-1.1-1.1M4.7 4.7 3.6 3.6" stroke-linecap="round"/></svg>',
     theme: '<svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 2.4a5.6 5.6 0 0 1 0 11.2z" fill="currentColor"/></svg>',
     spark: '<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5 9.6 6.4 14.5 8 9.6 9.6 8 14.5 6.4 9.6 1.5 8l4.9-1.6z"/></svg>',
     msg: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>',
@@ -508,7 +529,10 @@ svg { display: block; flex: none; }
     recompute();
     renderSidebar();
     renderTop();
-    if (ui.page === "groups") { renderGroupsBar(); renderGroups(); } else { renderFilterbar(); renderContent(); }
+    $("#filterbar").style.display = ui.page === "settings" ? "none" : "";
+    if (ui.page === "groups") { renderGroupsBar(); renderGroups(); }
+    else if (ui.page === "settings") renderSettings();
+    else { renderFilterbar(); renderContent(); }
     if (current) renderPeek();
     saveUi();
   }
@@ -529,6 +553,8 @@ svg { display: block; flex: none; }
     const focus = GROUPS.filter(g => g.open).sort(byAttention).slice(0, 8);
     $("#nav-groups").innerHTML = navItem(`data-page="groups"`, I.users, "全部客户群", GROUPS.length, ui.page === "groups") +
       focus.map(g => navItem(`data-group="${esc(g.id)}" title="${esc(g.raw_name || g.name)}"`, gav(g.id, g.name, 16), g.name, g.open, ev && onlyGroup === g.id)).join("");
+    const ms = D.model_settings || {};
+    $("#nav-system").innerHTML = navItem(`data-page="settings"`, I.gear, "设置", ms.selected && ms.selected !== ms.in_use ? "待生效" : "", ui.page === "settings");
     renderPipeline();
     const times = D.events.map(e => e.end_time).sort();
     $("#sync").innerHTML = API
@@ -548,6 +574,16 @@ svg { display: block; flex: none; }
   }
 
   function renderTop() {
+    if (ui.page === "settings") {
+      $("#view-icon").innerHTML = `<span class="muted">${I.gear}</span>`;
+      $("#view-name").textContent = "设置";
+      $("#view-count").textContent = "";
+      $("#layout-seg").style.display = "none";
+      $("#btn-display").style.display = "none";
+      $(".search").style.display = "none";
+      return;
+    }
+    $(".search").style.display = "";
     if (ui.page === "groups") {
       $("#view-icon").innerHTML = `<span class="muted">${I.users}</span>`;
       $("#view-name").textContent = "客户群";
@@ -612,6 +648,61 @@ svg { display: block; flex: none; }
         <span class="gt-msgs" title="${g.messages == null ? "" : `内部 ${g.inner} · 客户 ${g.customer} · ${g.senders} 人发言${g.images ? ` · 图片 ${g.images}` : ""}`}">${g.messages == null ? "–" : `${g.messages}<span class="muted">（${g.recent_24h}）</span>`}</span>
         <span class="gt-last${staleH(g.last) < 2 ? " hot" : ""}" title="${esc(fmtFull(g.last))}">${esc(g.last ? ago(g.last) : "–")}</span>
       </div>`).join("");
+  }
+
+  function nextRun() {
+    const d = new Date(); d.setMinutes(0, 0, 0); d.setHours(d.getHours() + 1);
+    return `${p2(d.getHours())}:00 左右`;
+  }
+  function renderSettings() {
+    order = [];
+    const ms = D.model_settings || {}, sy = D.sync || {};
+    const avail = ms.available || [];
+    const pending = ms.selected && ms.selected !== ms.in_use;
+    const fmtModel = v => v ? `<code>${esc(v)}</code>` : `<span class="muted">默认（服务器配置）</span>`;
+    const picker = !API || !ms.editable
+      ? `<span class="muted">${API ? "服务未开启运行时设置" : "单文件模式下不能修改，请在服务模式（aes serve）下使用"}</span>`
+      : avail.length
+        ? `<select id="model-select" aria-label="选择模型"><option value="">默认（服务器配置）</option>${avail.map(m => `<option value="${esc(m)}"${m === ms.selected ? " selected" : ""}>${esc(m)}</option>`).join("")}</select>`
+        : `<input type="text" id="model-input" placeholder="模型名，留空为默认" value="${esc(ms.selected || "")}" aria-label="模型名">`;
+    const st = sy.finished_at ? (sy.ok ? (staleH(sy.finished_at) > 2 ? `<span class="pill warn">超过 2 小时未更新</span>` : `<span class="pill">正常</span>`) : `<span class="pill bad">有错误</span>`) : `<span class="pill warn">尚未完成首次处理</span>`;
+    $("#content").innerHTML = `<div class="settings">
+      <h2>模型</h2>
+      <p class="desc">抽取事件使用的模型。修改后从下一次整点处理开始生效；只影响之后新出现或有新消息的对话，已经处理过的对话不会重新调用模型。</p>
+      <div class="scard">
+        <div class="srow"><span class="k">服务商</span><span class="v">${ms.provider ? `<code>${esc(ms.provider)}</code>` : `<span class="muted">首次处理完成后显示</span>`}</span></div>
+        <div class="srow"><span class="k">正在使用</span><span class="v">${ms.in_use ? `<code>${esc(ms.in_use)}</code> <span class="muted">（最近一次处理）</span>` : `<span class="muted">首次处理完成后显示</span>`}</span></div>
+        <div class="srow"><span class="k">选择模型</span><span class="v" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">${picker}
+          ${API && ms.editable ? `<button class="btn primary" id="model-save">保存</button>` : ""}</span></div>
+        ${pending ? `<div class="srow"><span class="k"></span><span class="v"><span class="pill warn">待生效</span> 已选择 <code>${esc(ms.selected)}</code>，将在下一次处理（${nextRun()}）生效</span></div>` : ""}
+        ${avail.length ? `<div class="srow"><span class="k">网关可用模型</span><span class="v muted">${avail.map(esc).join("、")}</span></div>` : ""}
+      </div>
+      ${(ms.history || []).length ? `<ul class="slog">${ms.history.slice().reverse().map(h => `<li><b>${esc(h.by)}</b> 将模型从 ${fmtModel(h.from)} 改为 ${fmtModel(h.to)} · <span title="${esc(fmtFull(h.at))}">${esc(ago(h.at))}</span></li>`).join("")}</ul>` : ""}
+
+      <h2>数据处理</h2>
+      <p class="desc">每小时自动拉取全部群最近几天的聊天记录，只把新出现或有新消息的对话交给模型，结果合并后显示在看板上。送给模型前人名会换成代号。</p>
+      <div class="scard">
+        <div class="srow"><span class="k">状态</span><span class="v">${st}</span></div>
+        <div class="srow"><span class="k">上次处理</span><span class="v">${sy.finished_at ? `${esc(fmtFull(sy.finished_at))} <span class="muted">（${esc(ago(sy.finished_at))}，耗时 ${sy.duration_seconds}s）</span>` : "–"}</span></div>
+        <div class="srow"><span class="k">下次处理</span><span class="v">${nextRun()}</span></div>
+        <div class="srow"><span class="k">拉取范围</span><span class="v">${sy.dates ? `全部群（UID ${esc(sy.uid)}）· ${sy.dates.map(esc).join("、")}` : "–"}</span></div>
+        <div class="srow"><span class="k">对话段</span><span class="v">${sy.windows != null ? `共 ${sy.windows} 段：新处理 ${sy.extracted}，复用缓存 ${sy.cached}${sy.failed ? `，<span style="color:var(--urgent)">失败 ${sy.failed}</span>` : ""}${sy.deferred ? `，积压 ${sy.deferred}（之后几次处理完）` : ""}<br><span class="muted">每次最多处理 ${sy.max_windows || "-"} 段</span>` : "–"}</span></div>
+        <div class="srow"><span class="k">事件</span><span class="v">${sy.events != null ? `${sy.events} 个（${sy.groups_with_events} 个群）` : "–"}</span></div>
+        ${(sy.errors || []).length ? `<div class="srow"><span class="k">错误</span><span class="v" style="color:var(--urgent)">${sy.errors.map(esc).join("<br>")}</span></div>` : ""}
+      </div>
+    </div>`;
+  }
+  async function saveModel() {
+    const sel = $("#model-select") || $("#model-input");
+    const v = sel ? sel.value.trim() : "";
+    try {
+      const r = await fetch("api/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: v || null }) });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error || r.status);
+      D.model_settings = body;
+      render();
+      toast(v ? `已选择 ${v}，下一次处理生效` : "已恢复为默认模型");
+    } catch (err) { toast("保存失败：" + err.message, true); }
   }
 
   function row(e) {
@@ -954,7 +1045,9 @@ svg { display: block; flex: none; }
       if (!r.ok) throw new Error(r.status);
       const nd = await r.json();
       const live = $("#live");
-      if (nd.version !== D.version) {
+      const editing = ui.page === "settings" && document.activeElement && /SELECT|INPUT/.test(document.activeElement.tagName);
+      if (editing) return;
+      if (nd.version !== D.version || JSON.stringify(nd.model_settings) !== JSON.stringify(D.model_settings) || JSON.stringify(nd.sync) !== JSON.stringify(D.sync)) {
         D = nd; edits = nd.edits || {}; history = nd.history || {};
         render();
       } else if (live) live.classList.remove("off");
@@ -997,6 +1090,7 @@ svg { display: block; flex: none; }
 
   const content = $("#content");
   content.addEventListener("click", ev => {
+    if (ev.target.closest("#model-save")) return saveModel();
     const gr = ev.target.closest("[data-gid]");
     if (gr) { ui.page = "events"; ui.view = "all"; ui.f = { group: [gr.dataset.gid] }; ui.q = ""; $("#q").value = ""; render(); content.scrollTop = 0; return; }
     if (ev.target.closest("#btn-reset-filters")) { ui.f = {}; ui.q = ""; ui.view = "all"; $("#q").value = ""; return render(); }
@@ -1079,7 +1173,7 @@ svg { display: block; flex: none; }
     const k = ev.key;
     if (k === "/") { ev.preventDefault(); return $("#q").focus(); }
     if (k === "Escape") { if (current) closePeek(); else { cursor = null; markCursor(); } return; }
-    if (ui.page === "groups" && !current) return;
+    if (ui.page !== "events" && !current) return;
     if (k === "j" || k === "ArrowDown") { ev.preventDefault(); return move(1); }
     if (k === "k" || k === "ArrowUp") { ev.preventDefault(); return move(-1); }
     if (k === "Enter" && cursor && !current && !ev.target.closest("button")) { ev.preventDefault(); return openPeek(cursor); }

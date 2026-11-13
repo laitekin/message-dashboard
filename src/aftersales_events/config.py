@@ -82,3 +82,34 @@ def load_settings(config_dir: str | Path | None = None) -> Settings:
     if os.environ.get("AES_FETCH_CONTAINER"):
         fetch["container"] = os.environ["AES_FETCH_CONTAINER"]
     return Settings(raw=raw, event_types=types)
+
+
+MODEL_RE = r"^[A-Za-z0-9][A-Za-z0-9._:/\-]{0,99}$"
+
+
+def load_runtime(path: str | Path) -> dict[str, Any]:
+    """看板「设置」页保存的运行时配置（data/runtime_settings.json）。文件不存在或损坏时返回空。"""
+    import json
+
+    p = Path(path)
+    if not p.exists():
+        return {}
+    try:
+        return json.loads(p.read_text(encoding="utf-8")) or {}
+    except (OSError, ValueError):
+        return {}
+
+
+def apply_runtime(settings: Settings, path: str | Path) -> str | None:
+    """把运行时选择的模型应用到当前 provider，优先级高于 AES_MODEL 和配置文件。返回生效的覆盖值。"""
+    model = ((load_runtime(path).get("llm") or {}).get("model") or "").strip()
+    if not model:
+        return None
+    llm = settings.raw.setdefault("llm", {})
+    provider = llm.get("provider", "claude")
+    if provider == "claude":
+        llm["model"] = model
+    else:
+        llm.setdefault(provider, {})
+        llm[provider]["model"] = model
+    return model
