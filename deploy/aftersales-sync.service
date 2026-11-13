@@ -12,8 +12,8 @@ SupplementaryGroups=docker
 WorkingDirectory=/opt/aftersales-board
 # 模型与数据源配置：AES_LLM_PROVIDER / AES_MODEL / DEEPSEEK_* / AES_FETCH_*（root 600，由 systemd 读取）
 EnvironmentFile=/opt/aftersales-board/.env
-ExecStart=/opt/aftersales-board/venv/bin/aes --config /opt/aftersales-board/config -v sync --uid 0
-# 首次运行要处理两天的全部对话，可能较久；超时被终止也没关系，已完成的窗口有缓存，下次接着做
+ExecStart=/opt/aftersales-board/venv/bin/aes --config /opt/aftersales-board/config -v sync --uid 0 --max-windows 120
+# 每次最多抽取 120 段对话（约 40 分钟），保证每小时都能跑完并刷新看板；积压的对话下次接着做（最近的优先）
 TimeoutStartSec=55min
 NoNewPrivileges=yes
 PrivateTmp=yes
