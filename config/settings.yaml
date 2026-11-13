@@ -1,0 +1,40 @@
+# 运行配置。环境变量可覆盖部分字段（见 README）。
+
+fetch:
+  # docker : 在能访问 Docker 的机器上执行 `docker exec <container> curl ...`
+  # direct : 从当前机器直接发送 HTTP 请求
+  mode: direct
+  url: ""  # 在本地配置，或通过 AES_FETCH_URL 设置
+  container: fetch-proxy
+  # 如需在其他机器上执行 Docker 命令，可配置 ["ssh", "user@host"]
+  ssh_prefix: []
+  timeout_seconds: 60
+  raw_dir: data/raw
+
+preprocess:
+  # 同一发送人、同一内容在该秒数内重复出现视为 OCR 重复采集
+  dedup_window_seconds: 600
+  # 被视为噪声的短消息（完全匹配，去首尾空白后）
+  noise_messages: ["1", "好", "好的", "收到", "嗯", "嗯嗯", "ok", "OK", "Ok", "稍等", "是的", "在的", "谢谢", "感谢", "[抱拳]", "[OK]", "[捂脸]"]
+  mask_secrets: true
+
+segment:
+  # 同一群内相邻消息间隔超过该分钟数则切分为新窗口
+  gap_minutes: 30
+  max_messages: 60
+  max_chars: 12000
+  # 窗口之间重叠的消息数（保留上下文）
+  overlap: 3
+
+llm:
+  model: claude-opus-5-5
+  effort: medium          # low | medium | high | xhigh | max
+  max_tokens: 16000
+  concurrency: 4
+  # 拒答时服务端自动回退到其他模型（Claude API 一方接口支持）；设为 false 关闭
+  server_side_fallback: true
+
+merge:
+  # 同群、同类型事件在该小时数内且标题相似则合并
+  window_hours: 72
+  title_similarity: 0.55

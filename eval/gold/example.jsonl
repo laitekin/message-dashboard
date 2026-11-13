@@ -1,0 +1,4 @@
+{"group_number": "R:1001", "type": "故障", "evidence_msg_ids": ["1", "4", "6"], "status": "已解决", "level": "P1", "title": "opus 502 渠道切换"}
+{"group_number": "R:1001", "type": "资源需求", "evidence_msg_ids": ["6", "7"], "status": "跟进中", "level": "P2", "title": "opus 提额 500万 TPM"}
+{"group_number": "R:1001", "type": "商务需求", "evidence_msg_ids": ["8", "9"], "status": "跟进中", "level": "P2", "title": "续约折扣"}
+{"group_number": "R:1002", "type": "功能需求", "evidence_msg_ids": ["20", "22"], "status": "跟进中", "level": "P3", "title": "按模型导出用量"}

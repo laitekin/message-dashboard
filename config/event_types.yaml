@@ -1,0 +1,134 @@
+# 事件类型定义 —— 这是调优清洗效果的主战场。
+# 每个类型：
+#   name        : 类型名（输出中的 type 字段）
+#   enabled     : 是否参与抽取
+#   push_to     : 二级输出推送对象（下游使用，抽取阶段仅作说明）
+#   definition  : 一句话定义
+#   include     : 算作该事件的判断标准
+#   exclude     : 不算该事件的情况（压误报）
+#   attributes  : 该类型专属属性（key: 说明），模型按需填写
+#   keywords    : 规则层关键词，命中后作为提示给到模型（不是硬性判定）
+
+types:
+  - name: 商机
+    enabled: true
+    push_to: 销售
+    definition: 客户表现出新增采购、扩容、试用新产品或新业务场景的意向。
+    include:
+      - 询问新产品/新模型/新区域的接入、价格、试用
+      - 明确提出扩量、上新业务、迁移业务到我方
+      - 内部人员识别出客户有可拓展的需求
+    exclude:
+      - 已有业务的日常故障处理、切换渠道（归为 故障）
+      - 单纯询问账单/发票（归为 商务需求）
+    attributes:
+      product: 涉及产品线或模型
+      scenario: 业务场景
+      estimated_volume: 预估用量/金额（原文数字+单位）
+      stage: 意向 | 试用 | 谈判 | 已下单
+      competitor: 提到的竞品
+    keywords: [试用, 接入, 报价, 扩容, 新业务, 上量, 采购, 迁移过来, 能不能开通, 有没有]
+
+  - name: 流失
+    enabled: true
+    push_to: 内部/销售
+    definition: 客户出现不满、降量、转向竞品或停止使用的信号。
+    include:
+      - 明确表达不满、投诉、威胁切走
+      - 提到正在测试/使用竞品，或比较价格后倾向竞品
+      - 用量骤降、停用、要求销户/退款
+      - 同一问题反复出现且客户情绪明显升级
+    exclude:
+      - 单次故障且客户情绪平稳（归为 故障）
+    attributes:
+      signal: 投诉 | 竞品 | 降量 | 迁移 | 停用 | 情绪升级
+      reason: 主要原因
+      competitor: 竞品名称
+      affected_product: 涉及产品
+    keywords: [投诉, 太慢, 不稳定, 换别家, 竞品, 迁走, 停用, 退款, 别家便宜, 不用了, 一直有问题]
+
+  - name: 牌照
+    enabled: true
+    push_to: 法务/合规/销售
+    definition: 客户对资质、牌照、备案、合规证明、授权文件的诉求。（口径待业务确认）
+    include:
+      - 索要大模型备案、ICP、等保、ISO 等资质证明
+      - 询问合规材料、授权书、安全评估
+    exclude:
+      - 普通合同/发票（归为 商务需求）
+    attributes:
+      license_type: 资质/牌照类型
+      purpose: 用途
+      deadline: 截止时间
+    keywords: [备案, 资质, 牌照, 等保, ISO, 合规, 授权书, 安全评估, 许可证]
+
+  - name: 资源需求
+    enabled: true
+    push_to: 采购
+    definition: 客户需要更多或特定的资源配额（模型 TPM/RPM、GPU、带宽、存储、并发等）。
+    include:
+      - 要求提升 TPM/RPM/QPS/并发 等限额
+      - 需要特定模型、特定区域、特定规格的资源
+      - 内部因资源不足需要采购/调配
+    exclude:
+      - 已有配额下的接口报错（归为 故障）
+    attributes:
+      resource_type: 模型 | GPU | 带宽 | 存储 | 其他
+      model: 模型名
+      metric: TPM | RPM | QPS | 并发 | 其他
+      current_value: 当前值（原文）
+      requested_value: 需求值（原文）
+      region: 区域
+      needed_by: 期望时间
+    keywords: [TPM, RPM, QPS, 并发, 限流, 配额, 扩容, 提额, 资源不够, 卡, 算力, GPU]
+
+  - name: 功能需求
+    enabled: true
+    push_to: 产品
+    definition: 客户对产品功能、接口、参数、体验提出的新增或改进要求。
+    include:
+      - 要求支持新参数/新接口/新能力
+      - 对控制台、日志、计费展示等提出改进
+    exclude:
+      - 现有功能出错（归为 故障）
+    attributes:
+      product: 产品线
+      feature: 功能描述
+      scenario: 业务场景
+      urgency: 高 | 中 | 低
+      workaround: 当前替代方案
+    keywords: [支持, 能不能加, 希望, 建议, 新增, 参数, 功能, 接口]
+
+  - name: 商务需求
+    enabled: true
+    push_to: 销售
+    definition: 合同、报价、折扣、发票、付款、账期、充值等商务事项。
+    include:
+      - 询价、要折扣、谈合同、开发票、对账、充值、账期
+    exclude:
+      - 资质/备案材料（归为 牌照）
+    attributes:
+      topic: 合同 | 报价 | 折扣 | 发票 | 付款 | 账期 | 充值 | 对账
+      amount: 金额（原文）
+      deadline: 截止时间
+    keywords: [合同, 报价, 折扣, 发票, 付款, 账期, 充值, 对账, 价格, 优惠, 余额]
+
+  # 会议纪要中"排障推给研发"，样本数据中大量为此类内容，建议作为第七类。
+  - name: 故障
+    enabled: true
+    push_to: 研发/运维
+    definition: 客户正在使用的服务出现异常（报错、超时、延迟高、结果错误等），以及相应的排查和处置。
+    include:
+      - 接口报错、超时、TTFT/延迟升高、渠道异常、需要切换渠道
+      - 内部人员排查、切流、恢复的过程
+    exclude:
+      - 客户只是询问用法且没有异常
+    attributes:
+      product: 产品/模型
+      channel: 渠道 ID/名称
+      symptom: 现象
+      request_ids: 相关 request_id（逗号分隔）
+      impact: 影响范围
+      action: 处置动作（如切换渠道、重启）
+      recovered_at: 恢复时间
+    keywords: [报错, 异常, 超时, 失败, 500, 502, 429, ttft, 延迟, 慢, 切换, 切离, 渠道, 挂了, 不可用, request_id]

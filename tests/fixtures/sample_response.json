@@ -1,0 +1,168 @@
+{
+ "code": 0,
+ "msg": "ok",
+ "uid": "1380000001",
+ "start": "2026-11-11",
+ "end": "2026-11-11",
+ "total": 12,
+ "groups": [
+  {
+   "group_number": "R:1001",
+   "group_name": "「示例」测试科技-1380000001",
+   "total": 9,
+   "records": [
+    {
+     "id": "1",
+     "group_number": "R:1001",
+     "group_name": "「示例」测试科技-1380000001",
+     "sender_number": "c1",
+     "display_name": "客户甲",
+     "nick_name": "客户甲",
+     "content": "claude-4.6-opus 一直报 502，request_id=chatptmsg-abc123def456 帮忙看下",
+     "created_at": "2026-11-11 10:00:00",
+     "send_time": "2026-11-11 10:00:00",
+     "is_inner": 0
+    },
+    {
+     "id": "2",
+     "group_number": "R:1001",
+     "group_name": "「示例」测试科技-1380000001",
+     "sender_number": "c1",
+     "display_name": "客户甲",
+     "nick_name": "客户甲",
+     "content": "claude-4.6-opus 一直报 502，request_id=chatptmsg-abc123def456 帮忙看下",
+     "created_at": "2026-11-11 10:00:40",
+     "send_time": "2026-11-11 10:00:40",
+     "is_inner": 0
+    },
+    {
+     "id": "3",
+     "group_number": "R:1001",
+     "group_name": "「示例」测试科技-1380000001",
+     "sender_number": "i1",
+     "display_name": "支持小王",
+     "nick_name": "支持小王",
+     "content": "收到",
+     "created_at": "2026-11-11 10:01:00",
+     "send_time": "2026-11-11 10:01:00",
+     "is_inner": 1
+    },
+    {
+     "id": "4",
+     "group_number": "R:1001",
+     "group_name": "「示例」测试科技-1380000001",
+     "sender_number": "i1",
+     "display_name": "支持小王",
+     "nick_name": "支持小王",
+     "content": "newapi-ss-demo-01 渠道异常，已切离，麻烦再试下",
+     "created_at": "2026-11-11 10:05:00",
+     "send_time": "2026-11-11 10:05:00",
+     "is_inner": 1
+    },
+    {
+     "id": "5",
+     "group_number": "R:1001",
+     "group_name": "「示例」测试科技-1380000001",
+     "sender_number": "c1",
+     "display_name": "客户甲",
+     "nick_name": "客户甲",
+     "content": "[图片]",
+     "created_at": "2026-11-11 10:06:00",
+     "send_time": "2026-11-11 10:06:00",
+     "is_inner": 0
+    },
+    {
+     "id": "6",
+     "group_number": "R:1001",
+     "group_name": "「示例」测试科技-1380000001",
+     "sender_number": "c1",
+     "display_name": "客户甲",
+     "nick_name": "客户甲",
+     "content": "好了，恢复了。另外我们下周要上新业务，opus 需要提到 500万 TPM，能安排吗",
+     "created_at": "2026-11-11 10:10:00",
+     "send_time": "2026-11-11 10:10:00",
+     "is_inner": 0
+    },
+    {
+     "id": "7",
+     "group_number": "R:1001",
+     "group_name": "「示例」测试科技-1380000001",
+     "sender_number": "i2",
+     "display_name": "销售小李",
+     "nick_name": "销售小李",
+     "content": "可以，我这边申请一下资源，联系电话 13812345678",
+     "created_at": "2026-11-11 10:12:00",
+     "send_time": "2026-11-11 10:12:00",
+     "is_inner": 1
+    },
+    {
+     "id": "8",
+     "group_number": "R:1001",
+     "group_name": "「示例」测试科技-1380000001",
+     "sender_number": "c1",
+     "display_name": "客户甲",
+     "nick_name": "客户甲",
+     "content": "另外合同快到期了，续约能给多少折扣？",
+     "created_at": "2026-11-11 15:00:00",
+     "send_time": "2026-11-11 15:00:00",
+     "is_inner": 0
+    },
+    {
+     "id": "9",
+     "group_number": "R:1001",
+     "group_name": "「示例」测试科技-1380000001",
+     "sender_number": "i2",
+     "display_name": "销售小李",
+     "nick_name": "销售小李",
+     "content": "我整理一下报价，api_key: sk-abcdefghijklmnopqrstuv 这个先别外发",
+     "created_at": "2026-11-11 15:05:00",
+     "send_time": "2026-11-11 15:05:00",
+     "is_inner": 1
+    }
+   ]
+  },
+  {
+   "group_number": "R:1002",
+   "group_name": "示例客户&支持团队-1380000002<4-000000-0-0>",
+   "total": 3,
+   "records": [
+    {
+     "id": "20",
+     "group_number": "R:1002",
+     "group_name": "示例客户&支持团队-1380000002<4-000000-0-0>",
+     "sender_number": "c9",
+     "display_name": "客户乙",
+     "nick_name": "客户乙",
+     "content": "你们控制台能不能加个按模型导出用量的功能？",
+     "created_at": "2026-11-11 09:00:00",
+     "send_time": "2026-11-11 09:00:00",
+     "is_inner": 0
+    },
+    {
+     "id": "21",
+     "group_number": "R:1002",
+     "group_name": "示例客户&支持团队-1380000002<4-000000-0-0>",
+     "sender_number": "i3",
+     "display_name": "产品小赵",
+     "nick_name": "产品小赵",
+     "content": "👍",
+     "created_at": "2026-11-11 09:01:00",
+     "send_time": "2026-11-11 09:01:00",
+     "is_inner": 1
+    },
+    {
+     "id": "22",
+     "group_number": "R:1002",
+     "group_name": "示例客户&支持团队-1380000002<4-000000-0-0>",
+     "sender_number": "i3",
+     "display_name": "产品小赵",
+     "nick_name": "产品小赵",
+     "content": "好的，记下来了，排期后同步",
+     "created_at": "2026-11-11 09:02:00",
+     "send_time": "2026-11-11 09:02:00",
+     "is_inner": 1
+    }
+   ]
+  }
+ ]
+}

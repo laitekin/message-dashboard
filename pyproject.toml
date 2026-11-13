@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aftersales-events"
+version = "0.1.0"
+description = "售后智能系统：从聊天记录等多源数据清洗出商机、流失、牌照、资源需求、功能需求、商务需求、故障等事件"
+requires-python = ">=3.10"
+dependencies = [
+    "anthropic>=2.8",
+    "pydantic>=2.6",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+aes = "aftersales_events.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+aftersales_events = ["prompts/*.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
