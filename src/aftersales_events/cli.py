@@ -45,12 +45,13 @@ def cmd_preview(args, settings) -> None:
 
 
 def cmd_run(args, settings) -> None:
-    from .extract import ClaudeExtractor
+    from .extract import make_extractor
     from .pipeline import run
 
+    extractor = make_extractor(settings.enabled_types, settings.section("llm"))
     raw = _load_input(args, settings)
     out = _out_dir(args.out, raw.uid or "run")
-    res = run(raw, settings, ClaudeExtractor(settings.enabled_types, settings.section("llm")), out_dir=out)
+    res = run(raw, settings, extractor, out_dir=out)
     print(json.dumps(res.stats, ensure_ascii=False, indent=2))
     print(f"结果：{out / 'events.jsonl'}，报告：{out / 'report.md'}，看板：{out / 'board.html'}")
 

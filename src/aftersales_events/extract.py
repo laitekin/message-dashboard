@@ -137,6 +137,152 @@ class ClaudeExtractor:
         return resp.parsed_output or WindowExtraction(events=[])
 
 
+class OpenAICompatExtractor:
+    """通过 OpenAI 兼容的 /chat/completions 接口调用模型（DeepSeek、公司网关等）。
+
+    这类接口没有严格的结构化输出，因此：
+    - 在 system prompt 末尾附上 JSON 格式说明，并开启 JSON 模式（网关不支持时自动关闭重试）；
+    - 解析时逐个校验事件，格式不对的单个事件丢弃，不影响同一窗口里的其他事件。
+    只用标准库发请求，不引入额外依赖。
+    """
+
+    JSON_INSTRUCTIONS = """
+
+## 输出格式
+只输出一个 JSON 对象，不要输出任何其他文字或代码块标记。格式如下（没有事件时 events 为空数组）：
+{"events": [{"type": "故障", "title": "15 字以内标题", "summary": "1-3 句话", "status": "跟进中", "level": "P2",
+ "owner": "内部人员姓名或 null", "evidence": ["m1", "m3"], "attributes": [{"key": "channel", "value": "原文"}], "confidence": 0.9}]}
+- status 只能是：新建 / 跟进中 / 已解决 / 已关闭；level 只能是：P0 / P1 / P2 / P3
+- evidence 只能引用本段出现的消息编号；confidence 为 0 到 1 之间的小数"""
+
+    RETRY_STATUS = {408, 409, 429, 500, 502, 503, 504, 529}
+
+    def __init__(self, types: list[EventTypeDef], cfg: dict[str, Any], provider: str = "deepseek",
+                 post: Any | None = None, sleep: Any | None = None):
+        import os
+        import time
+
+        pcfg = cfg.get(provider) or {}
+        env = provider.upper()
+        self.provider = provider
+        self.base_url = (pcfg.get("base_url") or "").rstrip("/")
+        self.api_key = os.environ.get(f"{env}_API_KEY", "")
+        if not self.base_url:
+            raise ValueError(f"缺少 {env}_BASE_URL 或 llm.{provider}.base_url")
+        if not self.api_key:
+            raise ValueError(f"缺少环境变量 {env}_API_KEY")
+        self.model = pcfg.get("model") or "deepseek-chat"
+        self.max_tokens = int(pcfg.get("max_tokens", cfg.get("max_tokens", 8000)))
+        self.temperature = pcfg.get("temperature", 0)
+        self.timeout = float(pcfg.get("timeout_seconds", 300))
+        self.retries = int(pcfg.get("retries", 3))
+        self.json_mode = bool(pcfg.get("json_mode", True))
+        self.system_prompt = build_system_prompt(types) + self.JSON_INSTRUCTIONS
+        self._post = post or self._http_post
+        self._sleep = sleep or time.sleep
+
+    def _http_post(self, url: str, body: dict) -> tuple[int, dict]:
+        import urllib.error
+        import urllib.request
+
+        req = urllib.request.Request(
+            url, data=json.dumps(body, ensure_ascii=False).encode(), method="POST",
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                return resp.status, json.loads(resp.read() or b"{}")
+        except urllib.error.HTTPError as e:
+            raw = e.read()
+            try:
+                return e.code, json.loads(raw or b"{}")
+            except json.JSONDecodeError:
+                return e.code, {"error": raw[:300].decode(errors="replace")}
+
+    def _request(self, window: Window, body: dict) -> dict:
+        url = f"{self.base_url}/chat/completions"
+        for attempt in range(self.retries + 1):
+            try:
+                code, data = self._post(url, body)
+            except OSError as e:  # 网络错误、超时
+                code, data = 0, {"error": str(e)}
+            if code == 200:
+                return data
+            if code == 400 and "response_format" in body:
+                # 部分网关/模型不支持 JSON 模式：去掉后重试，提示词里已有格式要求
+                log.warning("window %s: 接口不接受 JSON 模式，关闭后重试", window.window_id)
+                self.json_mode = False
+                body = {k: v for k, v in body.items() if k != "response_format"}
+                continue
+            if (code == 0 or code in self.RETRY_STATUS) and attempt < self.retries:
+                wait = min(30, 2 ** attempt * 2)
+                log.warning("window %s: HTTP %s，%ss 后重试：%s", window.window_id, code, wait, str(data)[:200])
+                self._sleep(wait)
+                continue
+            raise RuntimeError(f"{self.provider} 接口错误 HTTP {code}: {str(data)[:300]}")
+        raise RuntimeError(f"{self.provider} 接口多次重试仍失败")
+
+    @staticmethod
+    def parse(text: str, window_id: str = "") -> WindowExtraction:
+        """容错解析：去掉代码块标记、截取最外层 JSON 对象，逐个校验事件。"""
+        t = (text or "").strip()
+        if t.startswith("```"):
+            t = t.split("\n", 1)[1] if "\n" in t else ""
+            t = t.rsplit("```", 1)[0]
+        start, end = t.find("{"), t.rfind("}")
+        if start < 0 or end < start:
+            log.warning("window %s: 输出不是 JSON，跳过：%s", window_id, t[:200])
+            return WindowExtraction(events=[])
+        try:
+            data = json.loads(t[start:end + 1])
+        except json.JSONDecodeError as e:
+            log.warning("window %s: JSON 解析失败（%s），跳过", window_id, e)
+            return WindowExtraction(events=[])
+        items = data.get("events", []) if isinstance(data, dict) else []
+        events = []
+        for item in items if isinstance(items, list) else []:
+            if isinstance(item, dict) and isinstance(item.get("attributes"), dict):  # 兼容 {"k": "v"} 写法
+                item = {**item, "attributes": [{"key": k, "value": str(v)} for k, v in item["attributes"].items()]}
+            try:
+                events.append(ExtractedEvent.model_validate(item))
+            except Exception as e:
+                log.warning("window %s: 丢弃格式不正确的事件 %s：%s", window_id, str(item)[:120], str(e).splitlines()[0])
+        return WindowExtraction(events=events)
+
+    def extract(self, window: Window) -> WindowExtraction:
+        user_text, _ = render_window(window)
+        body: dict[str, Any] = {
+            "model": self.model,
+            "messages": [{"role": "system", "content": self.system_prompt}, {"role": "user", "content": user_text}],
+            "max_tokens": self.max_tokens,
+            "temperature": self.temperature,
+            "stream": False,
+        }
+        if self.json_mode:
+            body["response_format"] = {"type": "json_object"}
+        data = self._request(window, body)
+        choice = (data.get("choices") or [{}])[0]
+        u = data.get("usage") or {}
+        log.info("window %s: in=%s cache_hit=%s out=%s", window.window_id, u.get("prompt_tokens"),
+                 u.get("prompt_cache_hit_tokens", (u.get("prompt_tokens_details") or {}).get("cached_tokens")), u.get("completion_tokens"))
+        if choice.get("finish_reason") == "length":
+            log.warning("window %s: 输出被 max_tokens 截断，跳过", window.window_id)
+            return WindowExtraction(events=[])
+        return self.parse((choice.get("message") or {}).get("content") or "", window.window_id)
+
+
+PROVIDERS = ("claude", "deepseek")
+
+
+def make_extractor(types: list[EventTypeDef], cfg: dict[str, Any]) -> Extractor:
+    provider = (cfg.get("provider") or "claude").lower()
+    if provider == "claude":
+        return ClaudeExtractor(types, cfg)
+    if provider in PROVIDERS:
+        return OpenAICompatExtractor(types, cfg, provider)
+    raise ValueError(f"不支持的 llm.provider：{provider}（可选 {', '.join(PROVIDERS)}）")
+
+
 class DryRunExtractor:
     """不调用模型，只把每个窗口的完整 prompt 写到磁盘，用于检查 prompt / 估算规模。"""
 

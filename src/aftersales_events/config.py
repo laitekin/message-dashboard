@@ -57,8 +57,21 @@ def load_settings(config_dir: str | Path | None = None) -> Settings:
 
     # 环境变量覆盖
     llm = raw.setdefault("llm", {})
+    if os.environ.get("AES_LLM_PROVIDER"):
+        llm["provider"] = os.environ["AES_LLM_PROVIDER"].lower()
+    provider = llm.get("provider", "claude")
+    if provider != "claude":
+        pcfg = llm.setdefault(provider, {}) or {}
+        llm[provider] = pcfg
+        # 例如 DEEPSEEK_BASE_URL；API key 只从环境变量读取，不进配置
+        if os.environ.get(f"{provider.upper()}_BASE_URL"):
+            pcfg["base_url"] = os.environ[f"{provider.upper()}_BASE_URL"]
     if os.environ.get("AES_MODEL"):
-        llm["model"] = os.environ["AES_MODEL"]
+        # AES_MODEL 作用于当前选中的 provider
+        if provider == "claude":
+            llm["model"] = os.environ["AES_MODEL"]
+        else:
+            llm[provider]["model"] = os.environ["AES_MODEL"]
     if os.environ.get("AES_EFFORT"):
         llm["effort"] = os.environ["AES_EFFORT"]
     fetch = raw.setdefault("fetch", {})

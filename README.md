@@ -90,9 +90,20 @@ aes board out/ --input data/raw/1380000001_2026-11-10_2026-11-12.json --out out/
 
 ## 模型
 
-默认用 Claude（`claude-opus-5-5`，effort `medium`），通过 Anthropic Python SDK 的结构化输出（`messages.parse` + Pydantic）调用。system prompt 在所有窗口间完全相同，会被缓存。默认开启服务端拒答回退（`server_side_fallback`），可以在配置里关闭。环境变量 `AES_MODEL`、`AES_EFFORT` 可以覆盖配置。
+`llm.provider` 选择抽取用的模型，环境变量 `AES_LLM_PROVIDER` 可以覆盖：
 
-需要换成公司 MaaS 或其他模型时，实现一个带 `extract(window) -> WindowExtraction` 方法的类即可（参考 `extract.py` 里的 `ClaudeExtractor` 和 `DryRunExtractor`）。
+| provider | 调用方式 | 需要的环境变量 |
+|---|---|---|
+| `claude`（默认） | Anthropic Python SDK 结构化输出（`messages.parse` + Pydantic），默认 `claude-opus-5-5`、effort `medium`，system prompt 缓存，默认开启服务端拒答回退 | `ANTHROPIC_API_KEY` |
+| `deepseek` | OpenAI 兼容的 `/chat/completions`（只用标准库），JSON 模式 + 提示词里的格式说明，逐个校验事件，429/5xx/超时自动重试 | `DEEPSEEK_API_KEY`，可选 `DEEPSEEK_BASE_URL` |
+
+`AES_MODEL` 作用于当前选中的 provider，例如：
+
+```bash
+AES_LLM_PROVIDER=deepseek AES_MODEL=deepseek-v4-pro DEEPSEEK_BASE_URL=http://127.0.0.1:8080/v1 DEEPSEEK_API_KEY=sk-... aes -v run --input data/raw/xxx.json
+```
+
+需要接其他模型时，实现一个带 `extract(window) -> WindowExtraction` 方法的类即可（参考 `extract.py` 里的 `ClaudeExtractor`、`OpenAICompatExtractor` 和 `DryRunExtractor`）；OpenAI 兼容的网关可以直接在 `extract.py` 的 `PROVIDERS` 里加一个名字复用。
 
 ## 数据安全
 
