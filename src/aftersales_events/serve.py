@@ -160,9 +160,9 @@ class BoardApp:
     # ------------------------------------------------------------ 聊天记录（实时）
     LIVE_TTL_TODAY = 120
     LIVE_TTL_PAST = 1800
-    LIVE_CACHE_DAYS = 6
+    LIVE_CACHE_DAYS = 14  # 往上翻会连续加载多天
 
-    def _day_raw(self, d: str) -> tuple[dict, str, str]:
+    def _day_raw(self, d: str, fresh: bool = False) -> tuple[dict, str, str]:
         """返回 (原始 JSON, 来源 live/stored, 获取时间)。"""
         if not self.relay_url:
             files = sorted(self.raw_dir.glob(f"*_{d}_{d}.json")) if self.raw_dir and self.raw_dir.exists() else []
@@ -172,7 +172,7 @@ class BoardApp:
         ttl = self.LIVE_TTL_TODAY if d >= date.today().isoformat() else self.LIVE_TTL_PAST
         with self._live_lock:
             hit = self._live.get(d)
-            if hit and time.monotonic() - hit[0] < ttl:
+            if hit and not fresh and time.monotonic() - hit[0] < ttl:
                 return hit[1], "live", hit[2]
         url = f"{self.relay_url}/chat?{urlencode({'uid': '0', 'date': d})}"
         try:
@@ -193,8 +193,8 @@ class BoardApp:
                 self._live.pop(old, None)
         return data, "live", fetched
 
-    def group_messages(self, gid: str, d: str) -> dict:
-        data, source, fetched = self._day_raw(d)
+    def group_messages(self, gid: str, d: str, fresh: bool = False) -> dict:
+        data, source, fetched = self._day_raw(d, fresh)
         group = next((g for g in data.get("groups") or [] if g.get("group_number") == gid), None)
         msgs, seen = [], set()
         for r in sorted((group or {}).get("records") or [], key=lambda r: (r.get("send_time") or r.get("created_at") or "", str(r.get("id")))):
@@ -322,7 +322,9 @@ def make_handler(app: BoardApp):
                 self._json(200, app.payload(self._user()))
             elif path.startswith("/api/groups/") and path.endswith("/messages"):
                 gid = unquote(path[len("/api/groups/"):-len("/messages")])
-                d = (parse_qs(urlsplit(self.path).query).get("date") or [date.today().isoformat()])[0]
+                qs = parse_qs(urlsplit(self.path).query)
+                d = (qs.get("date") or [date.today().isoformat()])[0]
+                fresh = (qs.get("fresh") or ["0"])[0] == "1"
                 try:
                     date.fromisoformat(d)
                 except ValueError:
@@ -330,7 +332,7 @@ def make_handler(app: BoardApp):
                 if not gid or len(gid) > 100:
                     return self._json(400, {"error": "群号不正确"})
                 try:
-                    self._json(200, app.group_messages(gid, d))
+                    self._json(200, app.group_messages(gid, d, fresh))
                 except LookupError as e:
                     self._json(404, {"error": str(e)})
                 except RuntimeError as e:

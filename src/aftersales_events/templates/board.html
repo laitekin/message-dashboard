@@ -532,7 +532,10 @@ svg { display: block; flex: none; }
   if (!VIEWS.some(v => v.key === ui.view)) ui.view = "all";
   if (!["events", "groups", "settings"].includes(ui.page)) ui.page = "events";
   let cursor = null, current = null, order = [];
-  const chat = { gid: null, date: null, data: null, loading: false, error: null, role: "all", focus: [], seq: 0 };
+  // 聊天记录：按天加载，days 从旧到新；往上翻加载更早的一天，往下翻加载更新的一天（像微信）
+  const chat = { gid: null, name: "", days: [], role: "all", focus: [], seq: 0, upBusy: false, downBusy: false,
+                 upError: null, downError: null, emptyStreak: 0, exhausted: false, initError: null, atBottom: true };
+  const MAX_EMPTY_DAYS = 7;
   const saveUi = () => store.set("aes-board:ui2", Object.assign({}, ui, { q: "", page: ui.page === "chat" ? "groups" : ui.page }));
 
   function filtered() {
@@ -620,7 +623,7 @@ svg { display: block; flex: none; }
     if (ui.page === "chat") {
       const g = GBY[chat.gid];
       $("#view-icon").innerHTML = `<span class="muted">${I.msg}</span>`;
-      $("#view-name").innerHTML = `<button class="btn ghost" data-page-go="groups" style="padding:0 4px;height:24px;color:var(--muted)">客户群</button>${I.chevR}<span>${esc(g ? g.name : cleanName((chat.data && chat.data.group.name) || chat.gid))}</span><span class="muted" style="font-weight:400">· 聊天记录</span>`;
+      $("#view-name").innerHTML = `<button class="btn ghost" data-page-go="groups" style="padding:0 4px;height:24px;color:var(--muted)">客户群</button>${I.chevR}<span>${esc(g ? g.name : chat.name || chat.gid)}</span><span class="muted" style="font-weight:400">· 聊天记录</span>`;
       $("#view-count").textContent = "";
       $("#layout-seg").style.display = "none";
       $("#btn-display").style.display = "none";
@@ -708,57 +711,131 @@ svg { display: block; flex: none; }
   }
 
   // ============================================================ 聊天记录（实时获取，不在服务器存储）
-  const shiftDate = (d, n) => { const x = new Date(d + "T12:00:00"); x.setDate(x.getDate() + n); return `${x.getFullYear()}-${p2(x.getMonth() + 1)}-${p2(x.getDate())}`; };
+  const shiftDate = (d, n) => { const x = new Date(d + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
   const todayStr = () => D.today || new Date().toISOString().slice(0, 10);
+  const WEEK = ["日", "一", "二", "三", "四", "五", "六"];
+  const dayTitle = d => { const x = new Date(d + "T12:00:00Z"); return `${x.getUTCMonth() + 1}月${x.getUTCDate()}日 周${WEEK[x.getUTCDay()]}${d === todayStr() ? " · 今天" : d === shiftDate(todayStr(), -1) ? " · 昨天" : ""}`; };
+  const chatFirst = () => chat.days.length ? chat.days[0].date : null;
+  const chatLast = () => chat.days.length ? chat.days[chat.days.length - 1].date : null;
+
+  async function fetchDay(d, fresh) {
+    const r = await fetch(`api/groups/${encodeURIComponent(chat.gid)}/messages?date=${d}${fresh ? "&fresh=1" : ""}`, { cache: "no-store" });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(body.error || r.status);
+    return body;
+  }
   function openChat(gid, date, focus) {
-    Object.assign(chat, { gid, date: date || todayStr(), focus: focus || [], data: null, error: null, role: "all" });
+    const g = GBY[gid];
+    Object.assign(chat, { gid, name: g ? g.name : "", days: [], role: "all", focus: focus || [], seq: chat.seq + 1, upBusy: false, downBusy: false,
+                          upError: null, downError: null, emptyStreak: 0, exhausted: false, initError: null, atBottom: !(focus && focus.length) });
     ui.page = "chat"; ui.q = ""; $("#q").value = "";
     if (current) closePeek();
     render();
-    loadChat();
+    if (!API) { chat.initError = "单文件模式不能查看完整聊天记录，请在服务模式（aes serve）下使用"; return render(); }
+    loadInitial(date || todayStr());
   }
-  async function loadChat(force) {
-    if (!API) { chat.error = "单文件模式不能查看完整聊天记录，请在服务模式（aes serve）下使用"; return render(); }
-    const seq = ++chat.seq;
-    chat.loading = true; chat.error = null;
-    if (ui.page === "chat") renderChat();
+  async function loadInitial(d) {
+    const seq = chat.seq;
     try {
-      const r = await fetch(`api/groups/${encodeURIComponent(chat.gid)}/messages?date=${chat.date}${force ? "&_=" + Date.now() : ""}`, { cache: "no-store" });
-      const body = await r.json().catch(() => ({}));
+      const data = await fetchDay(d);
       if (seq !== chat.seq) return;
-      if (!r.ok) throw new Error(body.error || r.status);
-      chat.data = body;
-    } catch (err) { if (seq === chat.seq) { chat.error = err.message; chat.data = null; } }
-    if (seq !== chat.seq) return;
-    chat.loading = false;
-    if (ui.page === "chat") { render(); scrollToFocus(); }
+      if (!chat.name) chat.name = cleanName(data.group.name);
+      chat.days = [{ date: d, data }];
+      chat.emptyStreak = data.total ? 0 : 1;
+    } catch (err) { if (seq === chat.seq) { chat.initError = err.message; render(); } return; }
+    render();
+    if (chat.focus.length) scrollToFocus(); else scrollChatBottom();
+    fillScreen();
   }
+  // 内容不满一屏时继续往上加载，直到填满或到头
+  function fillScreen() {
+    const box = $("#content");
+    if (ui.page === "chat" && !chat.exhausted && !chat.upBusy && box.scrollHeight <= box.clientHeight + 80) loadOlder();
+  }
+  async function loadOlder() {
+    if (chat.upBusy || chat.exhausted || !chat.days.length) return;
+    const seq = chat.seq, d = shiftDate(chatFirst(), -1);
+    chat.upBusy = true; chat.upError = null; renderChatTop();
+    try {
+      const data = await fetchDay(d);
+      if (seq !== chat.seq) return;
+      const box = $("#content"), h = box.scrollHeight, top = box.scrollTop;
+      chat.days.unshift({ date: d, data });
+      chat.emptyStreak = data.total ? 0 : chat.emptyStreak + 1;
+      chat.exhausted = chat.emptyStreak >= MAX_EMPTY_DAYS;
+      chat.upBusy = false;
+      render();
+      box.scrollTop = box.scrollHeight - h + top;  // 保持当前看到的位置不跳
+      if (!data.total && !chat.exhausted) return loadOlder();  // 空的一天直接跳过
+      fillScreen();
+    } catch (err) { if (seq === chat.seq) { chat.upBusy = false; chat.upError = err.message; renderChatTop(); } }
+  }
+  async function loadNewer() {
+    if (chat.downBusy || !chat.days.length || chatLast() >= todayStr()) return;
+    const seq = chat.seq, d = shiftDate(chatLast(), 1);
+    chat.downBusy = true; chat.downError = null;
+    try {
+      const data = await fetchDay(d);
+      if (seq !== chat.seq) return;
+      chat.days.push({ date: d, data });
+      chat.downBusy = false;
+      const box = $("#content"), top = box.scrollTop;
+      render();
+      box.scrollTop = top;
+    } catch (err) { if (seq === chat.seq) { chat.downBusy = false; chat.downError = err.message; render(); } }
+  }
+  // 停在最新消息时，定时拉取今天的新消息
+  async function refreshToday(fresh) {
+    if (ui.page !== "chat" || !chat.days.length || chatLast() !== todayStr()) return;
+    const seq = chat.seq;
+    try {
+      const data = await fetchDay(todayStr(), fresh);
+      if (seq !== chat.seq) return;
+      const last = chat.days[chat.days.length - 1];
+      const added = data.total - (last.data ? last.data.total : 0);
+      const stick = chat.atBottom;
+      last.data = data;
+      const box = $("#content"), top = box.scrollTop;
+      render();
+      if (stick) scrollChatBottom(); else box.scrollTop = top;
+      if (fresh) toast(added > 0 ? `新增 ${added} 条消息` : "已是最新");
+      else if (added > 0 && !stick) toast(`有 ${added} 条新消息`);
+    } catch (err) { if (fresh) toast("刷新失败：" + err.message, true); }
+  }
+  function scrollChatBottom() { const box = $("#content"); box.scrollTop = box.scrollHeight; chat.atBottom = true; }
   function scrollToFocus() {
     if (!chat.focus.length) return;
     const el = document.querySelector(`.cmsg[data-mid="${CSS.escape(chat.focus[0])}"]`);
     if (el) { el.scrollIntoView({ block: "center" }); chat.focus.forEach(id => { const x = document.querySelector(`.cmsg[data-mid="${CSS.escape(id)}"]`); if (x) x.classList.add("flash"); }); }
     chat.focus = [];
   }
-  function chatFiltered() {
-    const msgs = (chat.data && chat.data.messages) || [];
+  function chatFilter(msgs, ev) {
     const words = ui.q.toLowerCase().split(/\s+/).filter(Boolean);
-    const ev = chat.data ? chat.data.evidence || {} : {};
     return msgs.filter(m => (chat.role === "all" || (chat.role === "ev" ? !!ev[m.id] : m.role === chat.role)) &&
       (!words.length || words.every(w => (m.content + " " + m.sender).toLowerCase().includes(w))));
   }
+  const chatTotals = () => {
+    let total = 0, shown = 0, evn = 0;
+    chat.days.forEach(({ data }) => {
+      if (!data) return;
+      const ev = data.evidence || {};
+      total += data.total;
+      shown += chatFilter(data.messages, ev).length;
+      evn += data.messages.filter(m => ev[m.id]).length;
+    });
+    return { total, shown, evn };
+  };
   function renderChatBar() {
-    const d = chat.data;
-    const n = d ? chatFiltered().length : 0;
-    const evn = d ? Object.keys(d.evidence || {}).filter(id => d.messages.some(m => m.id === id)).length : 0;
+    const { total, shown, evn } = chatTotals();
+    const range = chat.days.length ? (chatFirst() === chatLast() ? chatFirst() : `${chatFirst().slice(5)} ~ ${chatLast().slice(5)}`) : "";
+    const last = chat.days.length ? chat.days[chat.days.length - 1].data : null;
     $("#filterbar").innerHTML = `
-      <button class="icon-btn" data-chat-day="-1" title="前一天" aria-label="前一天" style="transform:rotate(180deg)">${I.chevR}</button>
-      <input type="date" class="cbar-date" id="chat-date" value="${esc(chat.date)}" max="${esc(todayStr())}" aria-label="日期">
-      <button class="icon-btn" data-chat-day="1" title="后一天" aria-label="后一天" ${chat.date >= todayStr() ? "disabled" : ""}>${I.chevR}</button>
-      ${chat.date !== todayStr() ? `<button class="fadd" data-chat-today>今天</button>` : ""}
+      <input type="date" class="cbar-date" id="chat-date" value="${esc(chatLast() || todayStr())}" max="${esc(todayStr())}" aria-label="跳到日期" title="跳到日期">
+      ${chatLast() !== todayStr() || !chat.atBottom ? `<button class="fadd" data-chat-latest>回到最新</button>` : ""}
       <span class="gseg" style="margin-left:6px">${[["all", "全部"], ["客户", "客户"], ["内部", "内部"], ["ev", `事件证据 ${evn}`]].map(([k, l]) => `<button data-chat-role="${k}" aria-pressed="${chat.role === k}">${l}</button>`).join("")}</span>
       <button class="fadd" data-chat-events>${I.stack}<span>该群事件</span></button>
-      <span class="stats"><span>${chat.loading ? "正在从数据源获取…" : d ? `${ui.q || chat.role !== "all" ? `${n} / ` : ""}<b>${d.total}</b> 条 · ${d.source === "live" ? "实时获取" : "已保存数据"} ${esc(fmtFull(d.fetched_at).slice(11))}` : ""}</span>
-        <button class="fadd" data-chat-refresh title="重新获取">刷新</button></span>`;
+      <span class="stats"><span>${range ? `${esc(range)} · ` : ""}${ui.q || chat.role !== "all" ? `${shown} / ` : ""}<b>${total}</b> 条${last ? ` · ${last.source === "live" ? "实时获取" : "已保存数据"} ${esc(fmtFull(last.fetched_at).slice(11))}` : ""}</span>
+        <button class="fadd" data-chat-refresh title="重新获取今天的消息">刷新</button></span>`;
   }
   function linkify(escaped) {
     return escaped.replace(/https?:\/\/[^\s<>"']+/g, u => `<a href="${u}" target="_blank" rel="noopener noreferrer">${u}</a>`);
@@ -767,27 +844,41 @@ svg { display: block; flex: none; }
     const words = ui.q.split(/\s+/).filter(Boolean).map(w => esc(w).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
     return words.length ? escaped.replace(new RegExp(`(${words.join("|")})(?![^<]*>)`, "gi"), "<mark>$1</mark>") : escaped;
   }
+  function chatTopHtml() {
+    if (chat.upBusy) return `<div class="cday muted" id="chat-top" style="position:static">正在加载 ${esc(dayTitle(shiftDate(chatFirst(), -1)))} 的消息…</div>`;
+    if (chat.upError) return `<div class="cday" id="chat-top" style="position:static;color:var(--urgent)">加载失败：${esc(chat.upError)} <button class="fadd" data-chat-more>重试</button></div>`;
+    if (chat.exhausted) return `<div class="cday muted" id="chat-top" style="position:static">往前 ${MAX_EMPTY_DAYS} 天都没有消息 <button class="fadd" data-chat-more>继续加载更早</button></div>`;
+    return `<div class="cday muted" id="chat-top" style="position:static">上划加载更早的消息</div>`;
+  }
+  function renderChatTop() { const el = $("#chat-top"); if (el) el.outerHTML = chatTopHtml(); }
   function renderChat() {
     order = [];
     const box = $("#content");
-    if (chat.error) { box.innerHTML = `<div class="empty"><div class="muted">${I.msg}</div><h3>获取失败</h3><p>${esc(chat.error)}</p>${API ? `<button class="btn" data-chat-refresh>重试</button>` : ""}</div>`; return; }
-    if (!chat.data) { box.innerHTML = `<div class="empty"><div class="muted">${I.msg}</div><h3>正在从数据源获取聊天记录…</h3><p>实时请求，不在服务器存储，通常需要几秒。</p></div>`; return; }
-    const list = chatFiltered();
-    if (!chat.data.total) { box.innerHTML = `<div class="empty"><div class="muted">${I.msg}</div><h3>${esc(chat.date)} 这个群没有消息</h3><p>换一天看看。</p></div>`; return; }
-    if (!list.length) { box.innerHTML = `<div class="empty"><div class="muted">${I.search}</div><h3>没有符合条件的消息</h3></div>`; return; }
-    const ev = chat.data.evidence || {};
-    let prev = null;
-    box.innerHTML = `<div class="chat"><div class="cday">${esc(chat.date)} · ${list.length} 条</div>` + list.map(m => {
-      const cont = prev && prev.sender === m.sender && (parseT(m.t) - parseT(prev.t)) < 5 * 60e3 && !ev[m.id] && !ev[prev.id];
-      prev = m;
-      const refs = ev[m.id] || [];
-      const body = m.image ? `<span class="img">[图片]</span>${m.content && m.content !== "[图片]" ? " " + linkify(hl(esc(m.content))) : ""}` : linkify(hl(esc(m.content)));
-      return `<div class="cmsg${cont ? " cont" : ""}${refs.length ? " ev" : ""}" data-mid="${esc(m.id)}">${avatar(m.sender)}
-        <div class="cb">${cont ? "" : `<div class="ch"><b>${hl(esc(m.sender))}</b><span class="role${m.role === "内部" ? " in" : ""}">${esc(m.role)}</span><span>${esc(fmtFull(m.t).slice(11))}</span><span class="code">#${esc(m.id)}</span></div>`}
-          <div class="cc">${body}</div>
-          ${refs.length ? `<div class="cev">${refs.map(x => `<button data-open-event="${esc(x.event_id)}">${dot(x.type)}${esc(x.type)} · ${esc(x.title)}</button>`).join("")}</div>` : ""}
-        </div></div>`;
-    }).join("") + `</div>`;
+    if (chat.initError) { box.innerHTML = `<div class="empty"><div class="muted">${I.msg}</div><h3>获取失败</h3><p>${esc(chat.initError)}</p>${API ? `<button class="btn" data-chat-retry>重试</button>` : ""}</div>`; return; }
+    if (!chat.days.length) { box.innerHTML = `<div class="empty"><div class="muted">${I.msg}</div><h3>正在从数据源获取聊天记录…</h3><p>实时请求，不在服务器存储，通常需要几秒。</p></div>`; return; }
+    const filtering = ui.q || chat.role !== "all";
+    const parts = chat.days.map(({ date, data }) => {
+      const ev = data.evidence || {};
+      const list = chatFilter(data.messages, ev);
+      if (!data.total) return `<div class="cday muted" style="position:static;padding:4px 0">${esc(dayTitle(date))} · 无消息</div>`;
+      if (!list.length) return filtering ? `<div class="cday muted" style="position:static;padding:4px 0">${esc(dayTitle(date))} · 无匹配消息</div>` : "";
+      let prev = null;
+      return `<div class="cday">${esc(dayTitle(date))} · ${filtering ? `${list.length} / ` : ""}${data.total} 条</div>` + list.map(m => {
+        const cont = prev && prev.sender === m.sender && (parseT(m.t) - parseT(prev.t)) < 5 * 60e3 && !ev[m.id] && !ev[prev.id];
+        prev = m;
+        const refs = ev[m.id] || [];
+        const body = m.image ? `<span class="img">[图片]</span>${m.content && m.content !== "[图片]" ? " " + linkify(hl(esc(m.content))) : ""}` : linkify(hl(esc(m.content)));
+        return `<div class="cmsg${cont ? " cont" : ""}${refs.length ? " ev" : ""}" data-mid="${esc(m.id)}">${avatar(m.sender)}
+          <div class="cb">${cont ? "" : `<div class="ch"><b>${hl(esc(m.sender))}</b><span class="role${m.role === "内部" ? " in" : ""}">${esc(m.role)}</span><span>${esc(fmtFull(m.t).slice(11))}</span><span class="code">#${esc(m.id)}</span></div>`}
+            <div class="cc">${body}</div>
+            ${refs.length ? `<div class="cev">${refs.map(x => `<button data-open-event="${esc(x.event_id)}">${dot(x.type)}${esc(x.type)} · ${esc(x.title)}</button>`).join("")}</div>` : ""}
+          </div></div>`;
+      }).join("");
+    }).join("");
+    const bottom = chatLast() < todayStr()
+      ? `<div class="cday muted" style="position:static">${chat.downBusy ? "正在加载更新的消息…" : chat.downError ? `加载失败：${esc(chat.downError)} <button class="fadd" data-chat-newer>重试</button>` : `<button class="fadd" data-chat-newer>下划加载 ${esc(dayTitle(shiftDate(chatLast(), 1)))}</button>`}</div>`
+      : `<div class="cday muted" style="position:static">— 已是最新 —</div>`;
+    box.innerHTML = `<div class="chat">${chatTopHtml()}${parts}${bottom}</div>`;
   }
 
   function nextRun() {
@@ -1212,7 +1303,7 @@ svg { display: block; flex: none; }
   $("#btn-menu").addEventListener("click", () => $("#sidebar").classList.toggle("on"));
   $("#layout-seg").addEventListener("click", ev => { const b = ev.target.closest("[data-layout]"); if (b) { ui.layout = b.dataset.layout; render(); } });
   $("#btn-display").addEventListener("click", ev => { if (pop.open && pop.anchor === ev.currentTarget) return closeMenu(); displayPanel(ev.currentTarget); });
-  $("#q").addEventListener("input", ev => { ui.q = ev.target.value.trim(); render(); });
+  $("#q").addEventListener("input", ev => { ui.q = ev.target.value.trim(); render(); if (ui.page === "chat" && chat.atBottom) scrollChatBottom(); });
   const setPlaceholder = () => { $("#q").placeholder = ui.page === "groups" ? "搜索客户群" : ui.page === "chat" ? "搜索消息内容或发送人" : "搜索事件"; };
   $("#q").addEventListener("keydown", ev => { if (ev.key === "Escape") { ev.target.value = ""; ui.q = ""; ev.target.blur(); render(); } if (ev.key === "Enter" || ev.key === "ArrowDown") { ev.preventDefault(); ev.target.blur(); move(1); } });
   $("#filterbar").addEventListener("change", ev => { if (ev.target.id === "gsort") { ui.gsort = ev.target.value; render(); } });
@@ -1229,6 +1320,14 @@ svg { display: block; flex: none; }
   });
 
   const content = $("#content");
+  content.addEventListener("scroll", () => {
+    if (ui.page !== "chat" || !chat.days.length) return;
+    const nearBottom = content.scrollHeight - content.scrollTop - content.clientHeight < 60;
+    if (nearBottom !== chat.atBottom) { chat.atBottom = nearBottom; renderChatBar(); }
+    if (content.scrollTop < 240) loadOlder();
+    if (nearBottom && chatLast() < todayStr()) loadNewer();
+  }, { passive: true });
+  setInterval(() => { if (!document.hidden && ui.page === "chat" && chat.atBottom) refreshToday(false); }, 60000);
   content.addEventListener("click", ev => {
     if (ev.target.closest("#model-save")) return saveModel();
     const gr = ev.target.closest("[data-gid]");
@@ -1296,16 +1395,17 @@ svg { display: block; flex: none; }
     const pg = t.closest("[data-page-go]");
     if (pg) { ui.page = pg.dataset.pageGo; return render(); }
     if (ui.page !== "chat") return;
-    const dd = t.closest("[data-chat-day]");
-    if (dd && !dd.disabled) { chat.date = shiftDate(chat.date, +dd.dataset.chatDay); chat.data = null; render(); return loadChat(); }
-    if (t.closest("[data-chat-today]")) { chat.date = todayStr(); chat.data = null; render(); return loadChat(); }
-    if (t.closest("[data-chat-refresh]")) return loadChat(true);
+    if (t.closest("[data-chat-latest]")) { if (chatLast() === todayStr()) { scrollChatBottom(); return renderChatBar(); } return openChat(chat.gid, todayStr()); }
+    if (t.closest("[data-chat-refresh]")) return chatLast() === todayStr() ? refreshToday(true) : openChat(chat.gid, todayStr());
+    if (t.closest("[data-chat-retry]")) return openChat(chat.gid, chatLast() || todayStr(), chat.focus);
+    if (t.closest("[data-chat-more]")) { chat.exhausted = false; chat.emptyStreak = 0; return loadOlder(); }
+    if (t.closest("[data-chat-newer]")) return loadNewer();
     const rl = t.closest("[data-chat-role]");
-    if (rl) { chat.role = rl.dataset.chatRole; return render(); }
+    if (rl) { chat.role = rl.dataset.chatRole; render(); if (chat.atBottom) scrollChatBottom(); return; }
     if (t.closest("[data-chat-events]")) { ui.page = "events"; ui.view = "all"; ui.f = { group: [chat.gid] }; return render(); }
   }, true);
   $("#filterbar").addEventListener("change", ev => {
-    if (ev.target.id === "chat-date" && ev.target.value) { chat.date = ev.target.value > todayStr() ? todayStr() : ev.target.value; chat.data = null; render(); loadChat(); }
+    if (ev.target.id === "chat-date" && ev.target.value) openChat(chat.gid, ev.target.value > todayStr() ? todayStr() : ev.target.value);
   });
 
   $("#peek").addEventListener("click", ev => {
