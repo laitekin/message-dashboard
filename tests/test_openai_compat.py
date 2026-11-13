@@ -98,3 +98,11 @@ def test_retry_and_json_mode_fallback(ds_env, raw, settings):
     ex, _ = make(ds_env, [(401, {"error": "invalid key"})])
     with pytest.raises(RuntimeError, match="401"):
         ex.extract(w)
+
+
+def test_fetch_env_overrides(monkeypatch):
+    monkeypatch.setenv("AES_FETCH_MODE", "docker")
+    monkeypatch.setenv("AES_FETCH_URL", "https://example.invalid/api")
+    monkeypatch.setenv("AES_FETCH_CONTAINER", "my-proxy")
+    f = load_settings(ROOT / "config").section("fetch")
+    assert (f["mode"], f["url"], f["container"]) == ("docker", "https://example.invalid/api", "my-proxy")

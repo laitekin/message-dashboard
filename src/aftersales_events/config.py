@@ -79,4 +79,6 @@ def load_settings(config_dir: str | Path | None = None) -> Settings:
         fetch["mode"] = os.environ["AES_FETCH_MODE"]
     if os.environ.get("AES_FETCH_URL"):
         fetch["url"] = os.environ["AES_FETCH_URL"]
+    if os.environ.get("AES_FETCH_CONTAINER"):
+        fetch["container"] = os.environ["AES_FETCH_CONTAINER"]
     return Settings(raw=raw, event_types=types)
