@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__AES_TITLE__</title>
+<style>
+:root {
+  --bg: #f4f5f7; --surface: #ffffff; --surface-2: #eef0f3; --border: #dde1e6;
+  --text: #1c2026; --muted: #646b75; --accent: #2f6fed; --accent-soft: #e5eeff;
+  --p0: #d4351c; --p1: #e8780c; --p2: #2f6fed; --p3: #7a828d;
+  --ok: #1a8a4a; --warn: #b26a00; --on-solid: #ffffff; --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+  --t0: #2f6fed; --t1: #d4351c; --t2: #7b4ddb; --t3: #0f8f8a; --t4: #c2410c; --t5: #a1468f; --t6: #4b6b1f; --t7: #5c6670;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111418; --surface: #1a1e24; --surface-2: #232830; --border: #2e343d;
+    --text: #e6e8eb; --muted: #9aa2ad; --accent: #6b9bff; --accent-soft: #1d2a45;
+    --p0: #ff6b55; --p1: #ffa14a; --p2: #6b9bff; --p3: #8e97a3;
+    --ok: #4cc785; --warn: #e0a640; --on-solid: #111418; --shadow: 0 1px 2px rgba(0,0,0,.4);
+    --t0: #6b9bff; --t1: #ff7a66; --t2: #a98bff; --t3: #3cc9c2; --t4: #ff9a5c; --t5: #e08ad0; --t6: #9ccc5a; --t7: #9aa2ad;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111418; --surface: #1a1e24; --surface-2: #232830; --border: #2e343d;
+  --text: #e6e8eb; --muted: #9aa2ad; --accent: #6b9bff; --accent-soft: #1d2a45;
+  --p0: #ff6b55; --p1: #ffa14a; --p2: #6b9bff; --p3: #8e97a3;
+  --ok: #4cc785; --warn: #e0a640; --on-solid: #111418; --shadow: 0 1px 2px rgba(0,0,0,.4);
+  --t0: #6b9bff; --t1: #ff7a66; --t2: #a98bff; --t3: #3cc9c2; --t4: #ff9a5c; --t5: #e08ad0; --t6: #9ccc5a; --t7: #9aa2ad;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  min-height: 100vh; display: flex; flex-direction: column;
+}
+button, select, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+.wrap { padding: 16px 20px; }
+header.top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-bottom: 8px; }
+header.top h1 { font-size: 18px; margin: 0; font-weight: 650; }
+header.top .meta { color: var(--muted); font-size: 12px; }
+header.top .spacer { flex: 1; }
+.btn {
+  border: 1px solid var(--border); background: var(--surface); border-radius: 8px;
+  padding: 5px 10px; font-size: 13px; line-height: 1.4;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-solid); }
+.btn.icon { padding: 5px 8px; display: inline-flex; align-items: center; }
+.btn[disabled] { opacity: .45; cursor: default; }
+.btn:focus-visible, select:focus-visible, input:focus-visible, .card:focus-visible, .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* KPI */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 6px 0 14px; }
+.kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; }
+.kpi .label { color: var(--muted); font-size: 12px; }
+.kpi .value { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.kpi .sub { color: var(--muted); font-size: 12px; }
+.kpi.alert .value { color: var(--p0); }
+
+/* toolbar */
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+.toolbar input[type=search] {
+  flex: 1 1 220px; min-width: 0; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 10px;
+}
+.toolbar select { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; max-width: min(240px, 100%); }
+.toolbar label.check { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 13px; white-space: nowrap; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg button { border: 0; background: transparent; padding: 5px 10px; font-size: 13px; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.chip {
+  border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 2px 10px;
+  font-size: 12px; display: inline-flex; align-items: center; gap: 6px; color: var(--muted);
+}
+.chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c, var(--muted)); }
+.chip[aria-pressed="true"] { border-color: var(--c, var(--accent)); color: var(--text); background: var(--surface-2); }
+.chip .n { font-variant-numeric: tabular-nums; }
+
+/* board */
+main.board {
+  flex: 1; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(270px, 1fr);
+  gap: 12px; overflow-x: auto; padding: 0 20px 20px; align-items: start;
+}
+.col { background: var(--surface-2); border-radius: 12px; display: flex; flex-direction: column; max-height: calc(100vh - 120px); min-height: 120px; }
+.col.drop { outline: 2px dashed var(--accent); outline-offset: -2px; }
+.col header { display: flex; align-items: center; gap: 8px; padding: 10px 12px 6px; font-weight: 600; }
+.col header .count { color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; }
+.col header .bar { width: 4px; height: 14px; border-radius: 2px; background: var(--c, var(--muted)); }
+.col header .hint { margin-left: auto; color: var(--muted); font-size: 11px; font-weight: 400; }
+.col .list { overflow-y: auto; padding: 4px 8px 10px; display: flex; flex-direction: column; gap: 8px; }
+.col .empty { color: var(--muted); font-size: 12px; text-align: center; padding: 18px 0; }
+
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--lc, var(--border));
+  border-radius: 9px; padding: 9px 10px; box-shadow: var(--shadow); cursor: pointer; text-align: left; width: 100%;
+}
+.card:hover { border-color: var(--accent); border-left-color: var(--lc); }
+.card.dragging { opacity: .4; }
+.row1 { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
+.lvl { font-size: 11px; font-weight: 700; padding: 0 6px; border-radius: 4px; color: var(--on-solid); background: var(--lc); line-height: 18px; }
+.tag { font-size: 11px; padding: 0 6px; border-radius: 4px; line-height: 18px; color: var(--c); border: 1px solid currentColor; }
+.st { font-size: 11px; color: var(--muted); }
+.edited { font-size: 11px; color: var(--warn); margin-left: auto; }
+.card .title { font-weight: 600; margin: 2px 0 4px; word-break: break-word; }
+.card .sum { color: var(--muted); font-size: 12px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.card .foot { display: flex; gap: 10px; flex-wrap: wrap; color: var(--muted); font-size: 12px; margin-top: 6px; }
+.card .foot .stale { color: var(--warn); }
+.conf { display: inline-flex; align-items: center; gap: 4px; }
+.conf i { display: inline-block; width: 28px; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; position: relative; }
+.conf i b { position: absolute; inset: 0 auto 0 0; background: var(--accent); }
+
+/* drawer */
+.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.25); opacity: 0; pointer-events: none; transition: opacity .15s; }
+.scrim.on { opacity: 1; pointer-events: auto; }
+aside.drawer {
+  position: fixed; top: 0; right: 0; height: 100vh; width: min(520px, 100vw); background: var(--surface);
+  border-left: 1px solid var(--border); transform: translateX(100%); transition: transform .18s ease;
+  display: flex; flex-direction: column; z-index: 10;
+}
+aside.drawer.on { transform: none; }
+.drawer .dh { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); }
+.drawer .dh h2 { font-size: 16px; margin: 6px 0 2px; word-break: break-word; }
+.drawer .close { float: right; border: 0; background: transparent; font-size: 20px; line-height: 1; color: var(--muted); padding: 2px 6px; }
+.drawer .db { padding: 12px 16px 24px; overflow-y: auto; }
+.drawer section { margin-bottom: 16px; }
+.drawer h3 { font-size: 12px; color: var(--muted); font-weight: 600; margin: 0 0 6px; text-transform: uppercase; letter-spacing: .02em; }
+.kv { display: grid; grid-template-columns: 84px 1fr; gap: 4px 10px; font-size: 13px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; word-break: break-word; }
+.edit { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+.edit label { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 3px; }
+.edit select, .edit input { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; }
+.msg { border-left: 2px solid var(--border); padding: 4px 0 4px 10px; margin-bottom: 8px; }
+.msg.in { border-left-color: var(--accent); }
+.msg .mh { font-size: 12px; color: var(--muted); }
+.msg .mc { white-space: pre-wrap; word-break: break-word; }
+.ids { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--muted); word-break: break-all; }
+
+.toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 6px 14px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 20; }
+.toast.on { opacity: .92; }
+
+@media (max-width: 720px) {
+  .wrap { padding: 12px 16px; }
+  main.board { grid-auto-flow: row; grid-auto-columns: auto; grid-template-columns: 1fr; padding: 0 16px 16px; overflow-x: visible; }
+  .col { max-height: none; }
+  .kpi .value { font-size: 19px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1 id="title"></h1>
+    <span class="meta" id="meta"></span>
+    <span class="spacer"></span>
+    <button class="btn" id="btn-reset" title="清除在本浏览器里做的所有修改">撤销修改</button>
+    <button class="btn primary" id="btn-export" title="导出应用了修改后的 events.jsonl">导出 JSONL</button>
+    <button class="btn icon" id="btn-theme" title="切换明暗主题" aria-label="切换明暗主题"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5a6.5 6.5 0 0 1 0 13z" fill="currentColor"/></svg></button>
+  </header>
+  <div class="kpis" id="kpis"></div>
+  <div class="toolbar">
+    <input type="search" id="q" placeholder="搜索标题 / 摘要 / 群名 / 客户 UID / 属性…" aria-label="搜索">
+    <span class="seg" id="dims" role="group" aria-label="列分组"></span>
+    <select id="f-level" aria-label="等级"><option value="">全部等级</option></select>
+    <select id="f-group" aria-label="群"><option value="">全部群</option></select>
+    <select id="f-owner" aria-label="跟进人"><option value="">全部跟进人</option></select>
+    <label class="check"><input type="checkbox" id="f-open"> 只看未关闭</label>
+  </div>
+  <div class="chips" id="type-chips" role="group" aria-label="事件类型"></div>
+</div>
+<main class="board" id="board"></main>
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true" role="dialog" aria-label="事件详情"></aside>
+<div class="toast" id="toast"></div>
+
+<script type="application/json" id="aes-data">__AES_DATA__</script>
+<script>
+(function () {
+  "use strict";
+  const D = JSON.parse(document.getElementById("aes-data").textContent);
+  const $ = (s, el) => (el || document).querySelector(s);
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* 隐私模式等情况下忽略 */ } },
+    del(k) { try { localStorage.removeItem(k); } catch (e) {} },
+  };
+  const KEY = "aes-board:" + D.board_id;
+  const NONE = "未分配";
+  const OPEN = new Set(["新建", "跟进中"]);
+  const LV_ORDER = Object.fromEntries(D.levels.map((l, i) => [l, i]));
+  const TYPE_COLOR = Object.fromEntries(D.types.map((t, i) => [t.name, `var(--t${i % 8})`]));
+  const PUSH = Object.fromEntries(D.types.map(t => [t.name, t.push_to]));
+  const STATUS_COLOR = { "新建": "var(--p1)", "跟进中": "var(--accent)", "已解决": "var(--ok)", "已关闭": "var(--p3)" };
+  const DIMS = [
+    { key: "status", label: "状态", values: () => D.statuses, color: v => STATUS_COLOR[v] },
+    { key: "type", label: "类型", values: () => D.types.map(t => t.name), color: v => TYPE_COLOR[v] },
+    { key: "level", label: "等级", values: () => D.levels, color: v => `var(--${v.toLowerCase()})` },
+    { key: "owner", label: "跟进人", values: () => ownerList(), color: () => "var(--muted)" },
+  ];
+
+  let edits = store.get(KEY, {});
+  const ui = Object.assign({ dim: "status", q: "", level: "", group: "", owner: "", open: false, types: [] }, store.get("aes-board:ui", {}));
+  let current = null; // 详情面板中的 event_id
+
+  const ev = e => Object.assign({}, e, edits[e.event_id] || {});
+  const events = () => D.events.map(ev);
+  const ownerOf = e => e.owner || NONE;
+  function ownerList() {
+    const n = {};
+    events().forEach(e => { n[ownerOf(e)] = (n[ownerOf(e)] || 0) + 1; });
+    return Object.keys(n).filter(o => o !== NONE).sort((a, b) => n[b] - n[a] || a.localeCompare(b, "zh")).concat([NONE]);
+  }
+  const dim = () => DIMS.find(d => d.key === ui.dim) || DIMS[0];
+  const fieldOf = (e, key) => key === "owner" ? ownerOf(e) : e[key];
+
+  function fmt(iso) {
+    const d = new Date(iso);
+    if (isNaN(d)) return iso || "";
+    const p = n => String(n).padStart(2, "0");
+    return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+  function ago(iso) {
+    const ms = Date.now() - new Date(iso).getTime();
+    if (!(ms > 0)) return "";
+    const h = ms / 36e5;
+    if (h < 1) return Math.max(1, Math.round(ms / 6e4)) + " 分钟前";
+    if (h < 48) return Math.round(h) + " 小时前";
+    return Math.round(h / 24) + " 天前";
+  }
+  const staleHours = iso => (Date.now() - new Date(iso).getTime()) / 36e5;
+
+  function matches(e) {
+    if (ui.types.length && !ui.types.includes(e.type)) return false;
+    if (ui.level && e.level !== ui.level) return false;
+    if (ui.group && e.group_number !== ui.group) return false;
+    if (ui.owner && ownerOf(e) !== ui.owner) return false;
+    if (ui.open && !OPEN.has(e.status)) return false;
+    if (ui.q) {
+      const hay = [e.title, e.summary, e.group_name, e.customer_uid, e.owner, e.type,
+        ...Object.entries(e.attributes || {}).flat()].join(" ").toLowerCase();
+      if (!ui.q.toLowerCase().split(/\s+/).filter(Boolean).every(w => hay.includes(w))) return false;
+    }
+    return true;
+  }
+
+  // ------------------------------------------------------------- 渲染
+  function renderKpis(list) {
+    const open = list.filter(e => OPEN.has(e.status));
+    const urgent = open.filter(e => e.level === "P0" || e.level === "P1");
+    const stale = open.filter(e => staleHours(e.end_time) > 24);
+    const fresh = list.filter(e => e.status === "新建");
+    const groups = new Set(list.map(e => e.group_number));
+    const avg = list.length ? list.reduce((s, e) => s + e.confidence, 0) / list.length : 0;
+    const k = [
+      ["事件总数", list.length, `${groups.size} 个群`],
+      ["未关闭", open.length, `新建 ${fresh.length} · 跟进中 ${open.length - fresh.length}`],
+      ["P0/P1 未关闭", urgent.length, urgent.length ? "需优先处理" : "暂无", urgent.length > 0],
+      ["超 24h 无动态", stale.length, "未关闭事件中", stale.length > 0],
+      ["平均置信度", list.length ? avg.toFixed(2) : "-", "模型自评"],
+    ];
+    $("#kpis").innerHTML = k.map(([l, v, s, a]) =>
+      `<div class="kpi${a ? " alert" : ""}"><div class="label">${esc(l)}</div><div class="value">${esc(v)}</div><div class="sub">${esc(s)}</div></div>`).join("");
+  }
+
+  function renderChips(all) {
+    const n = {};
+    all.forEach(e => { n[e.type] = (n[e.type] || 0) + 1; });
+    $("#type-chips").innerHTML = D.types.map(t =>
+      `<button class="chip" style="--c:${TYPE_COLOR[t.name]}" data-type="${esc(t.name)}" aria-pressed="${ui.types.includes(t.name)}" title="${esc(t.push_to ? "推送：" + t.push_to : "")}">` +
+      `<span class="dot"></span>${esc(t.name)}<span class="n">${n[t.name] || 0}</span></button>`).join("");
+  }
+
+  function card(e) {
+    const stale = OPEN.has(e.status) && staleHours(e.end_time) > 24;
+    const attrs = Object.keys(e.attributes || {}).length;
+    const edited = !!edits[e.event_id];
+    return `<div class="card" draggable="true" tabindex="0" role="button" data-id="${esc(e.event_id)}" style="--lc:var(--${e.level.toLowerCase()})">
+      <div class="row1"><span class="lvl">${esc(e.level)}</span>
+        ${ui.dim !== "type" ? `<span class="tag" style="--c:${TYPE_COLOR[e.type]}">${esc(e.type)}</span>` : ""}
+        ${ui.dim !== "status" ? `<span class="st">${esc(e.status)}</span>` : ""}
+        ${edited ? `<span class="edited" title="在本浏览器中修改过">已修改</span>` : ""}</div>
+      <div class="title">${esc(e.title)}</div>
+      <div class="sum">${esc(e.summary)}</div>
+      <div class="foot">
+        <span title="${esc(e.group_name)}">${esc(e.customer_uid || e.group_name)}</span>
+        ${ui.dim !== "owner" ? `<span>👤 ${esc(e.owner || NONE)}</span>` : ""}
+        <span class="${stale ? "stale" : ""}" title="${esc(fmt(e.start_time) + " ~ " + fmt(e.end_time))}">${esc(ago(e.end_time) || fmt(e.end_time))}</span>
+        <span class="conf" title="置信度 ${e.confidence.toFixed(2)}"><i><b style="width:${Math.round(e.confidence * 100)}%"></b></i>${e.confidence.toFixed(2)}</span>
+        ${attrs ? `<span>${attrs} 个属性</span>` : ""}
+      </div></div>`;
+  }
+
+  function render() {
+    const all = events();
+    const list = all.filter(matches);
+    renderKpis(list);
+    renderChips(all);
+    const d = dim();
+    const sorted = list.slice().sort((a, b) => LV_ORDER[a.level] - LV_ORDER[b.level] || (b.end_time > a.end_time ? 1 : -1));
+    $("#board").innerHTML = d.values().map(v => {
+      const items = sorted.filter(e => fieldOf(e, d.key) === v);
+      return `<section class="col" data-value="${esc(v)}" style="--c:${d.color(v)}">
+        <header><span class="bar"></span>${esc(v)}<span class="count">${items.length}</span>
+          ${d.key === "type" && PUSH[v] ? `<span class="hint">→ ${esc(PUSH[v])}</span>` : ""}</header>
+        <div class="list">${items.length ? items.map(card).join("") : `<div class="empty">拖到这里</div>`}</div></section>`;
+    }).join("");
+    $("#btn-reset").disabled = !Object.keys(edits).length;
+    $("#btn-reset").textContent = Object.keys(edits).length ? `撤销修改（${Object.keys(edits).length}）` : "撤销修改";
+    if (current) renderDrawer();
+    store.set("aes-board:ui", ui);
+  }
+
+  function renderToolbar() {
+    $("#title").textContent = D.title;
+    document.title = D.title;
+    const times = D.events.map(e => e.end_time).sort();
+    $("#meta").textContent = (times.length ? `数据截至 ${fmt(times[times.length - 1])} · ` : "") + `生成于 ${fmt(D.generated_at)}`;
+    $("#dims").innerHTML = DIMS.map(d => `<button data-dim="${d.key}" aria-pressed="${d.key === ui.dim}">${d.label}</button>`).join("");
+    $("#f-level").innerHTML = `<option value="">全部等级</option>` + D.levels.map(l => `<option>${l}</option>`).join("");
+    const groups = {};
+    D.events.forEach(e => { groups[e.group_number] = e.group_name; });
+    $("#f-group").innerHTML = `<option value="">全部群</option>` +
+      Object.entries(groups).sort((a, b) => a[1].localeCompare(b[1], "zh")).map(([k, v]) => `<option value="${esc(k)}">${esc(v)}</option>`).join("");
+    $("#f-owner").innerHTML = `<option value="">全部跟进人</option>` + ownerList().map(o => `<option>${esc(o)}</option>`).join("");
+    // 恢复上次的筛选；已不存在的选项回退为“全部”
+    ["level", "group", "owner"].forEach(k => {
+      const sel = $("#f-" + k);
+      sel.value = ui[k];
+      if (sel.value !== ui[k]) ui[k] = "";
+    });
+    $("#q").value = ui.q;
+    $("#f-open").checked = ui.open;
+    ui.types = ui.types.filter(t => t in TYPE_COLOR);
+  }
+
+  // ------------------------------------------------------------- 详情面板
+  function renderDrawer() {
+    const raw = D.events.find(e => e.event_id === current);
+    if (!raw) return closeDrawer();
+    const e = ev(raw);
+    const opts = (vals, cur) => vals.map(v => `<option${v === cur ? " selected" : ""}>${esc(v)}</option>`).join("");
+    const attrs = Object.entries(e.attributes || {});
+    const msgs = e.evidence_msg_ids.map(id => [id, D.messages[id]]);
+    const hasMsgs = msgs.some(([, m]) => m);
+    $("#drawer").innerHTML = `
+      <div class="dh"><button class="close" id="d-close" aria-label="关闭">×</button>
+        <div class="row1"><span class="lvl" style="--lc:var(--${e.level.toLowerCase()})">${esc(e.level)}</span>
+          <span class="tag" style="--c:${TYPE_COLOR[e.type]}">${esc(e.type)}</span><span class="st">${esc(e.status)}</span>
+          ${edits[e.event_id] ? `<span class="edited">已修改</span>` : ""}</div>
+        <h2>${esc(e.title)}</h2></div>
+      <div class="db">
+        <section><p style="margin:0">${esc(e.summary)}</p></section>
+        <section><h3>处理</h3><div class="edit">
+          <label>状态<select data-f="status">${opts(D.statuses, e.status)}</select></label>
+          <label>等级<select data-f="level">${opts(D.levels, e.level)}</select></label>
+          <label>类型<select data-f="type">${opts(D.types.map(t => t.name), e.type)}</select></label>
+          <label>跟进人<input data-f="owner" value="${esc(e.owner || "")}" placeholder="${NONE}"></label>
+        </div>${edits[e.event_id] ? `<p style="margin:8px 0 0"><button class="btn" id="d-revert">恢复为原始值</button></p>` : ""}</section>
+        <section><h3>基本信息</h3><dl class="kv">
+          <dt>群</dt><dd>${esc(e.group_name)}</dd>
+          <dt>客户 UID</dt><dd>${esc(e.customer_uid || "-")}</dd>
+          <dt>推送</dt><dd>${esc(PUSH[e.type] || "-")}</dd>
+          <dt>时间</dt><dd>${esc(fmt(e.start_time))} ~ ${esc(fmt(e.end_time))}</dd>
+          <dt>置信度</dt><dd>${e.confidence.toFixed(2)}</dd>
+          <dt>事件 ID</dt><dd class="ids">${esc(e.event_id)}</dd>
+        </dl></section>
+        ${attrs.length ? `<section><h3>属性</h3><dl class="kv">${attrs.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl></section>` : ""}
+        <section><h3>证据消息（${msgs.length}）</h3>
+          ${hasMsgs ? msgs.map(([id, m]) => m
+            ? `<div class="msg${m.role === "内部" ? " in" : ""}"><div class="mh">${esc(fmt(m.t))} · ${esc(m.role)} · ${esc(m.sender)} <span class="ids">#${esc(id)}</span></div><div class="mc">${esc(m.content)}</div></div>`
+            : `<div class="msg"><div class="mh ids">#${esc(id)}（原文未提供）</div></div>`).join("")
+          : `<div class="ids">${msgs.map(([id]) => "#" + esc(id)).join("  ")}</div>
+             <p style="color:var(--muted);font-size:12px">生成看板时加上 <code>--input 原始数据.json</code> 即可在这里看到消息原文。</p>`}
+        </section>
+        <section><h3>来源窗口</h3><div class="ids">${(e.source_windows || []).map(esc).join("<br>") || "-"}</div></section>
+      </div>`;
+  }
+  function openDrawer(id) {
+    current = id;
+    renderDrawer();
+    $("#drawer").classList.add("on");
+    $("#drawer").setAttribute("aria-hidden", "false");
+    $("#scrim").classList.add("on");
+    $("#d-close").focus();
+  }
+  function closeDrawer() {
+    const id = current;
+    current = null;
+    $("#drawer").classList.remove("on");
+    $("#drawer").setAttribute("aria-hidden", "true");
+    $("#scrim").classList.remove("on");
+    const c = id && document.querySelector(`.card[data-id="${CSS.escape(id)}"]`);
+    if (c) c.focus();
+  }
+
+  // ------------------------------------------------------------- 修改
+  function setField(id, key, value) {
+    const orig = D.events.find(e => e.event_id === id);
+    if (!orig) return;
+    if (key === "owner") value = value && value !== NONE ? value.trim() || null : null;
+    const patch = Object.assign({}, edits[id] || {});
+    if (value === orig[key]) delete patch[key]; else patch[key] = value;
+    if (Object.keys(patch).length) edits[id] = patch; else delete edits[id];
+    store.set(KEY, edits);
+    if (key === "owner") renderToolbar();
+    render();
+  }
+  function toast(msg) {
+    const t = $("#toast");
+    t.textContent = msg;
+    t.classList.add("on");
+    clearTimeout(toast.h);
+    toast.h = setTimeout(() => t.classList.remove("on"), 1800);
+  }
+
+  // ------------------------------------------------------------- 事件绑定
+  $("#dims").addEventListener("click", e => {
+    const b = e.target.closest("button[data-dim]");
+    if (!b) return;
+    ui.dim = b.dataset.dim;
+    $("#dims").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+    render();
+  });
+  $("#type-chips").addEventListener("click", e => {
+    const b = e.target.closest(".chip");
+    if (!b) return;
+    const t = b.dataset.type;
+    ui.types = ui.types.includes(t) ? ui.types.filter(x => x !== t) : ui.types.concat([t]);
+    render();
+  });
+  $("#q").addEventListener("input", e => { ui.q = e.target.value.trim(); render(); });
+  ["level", "group", "owner"].forEach(k => $("#f-" + k).addEventListener("change", e => { ui[k] = e.target.value; render(); }));
+  $("#f-open").addEventListener("change", e => { ui.open = e.target.checked; render(); });
+
+  const board = $("#board");
+  board.addEventListener("click", e => { const c = e.target.closest(".card"); if (c) openDrawer(c.dataset.id); });
+  board.addEventListener("keydown", e => {
+    const c = e.target.closest(".card");
+    if (c && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openDrawer(c.dataset.id); }
+  });
+  let dragId = null;
+  board.addEventListener("dragstart", e => {
+    const c = e.target.closest(".card");
+    if (!c) return;
+    dragId = c.dataset.id;
+    c.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", dragId);
+  });
+  board.addEventListener("dragend", e => {
+    const c = e.target.closest(".card");
+    if (c) c.classList.remove("dragging");
+    board.querySelectorAll(".col.drop").forEach(x => x.classList.remove("drop"));
+    dragId = null;
+  });
+  board.addEventListener("dragover", e => {
+    const col = e.target.closest(".col");
+    if (!col || !dragId) return;
+    e.preventDefault();
+    board.querySelectorAll(".col.drop").forEach(x => x !== col && x.classList.remove("drop"));
+    col.classList.add("drop");
+  });
+  board.addEventListener("drop", e => {
+    const col = e.target.closest(".col");
+    if (!col || !dragId) return;
+    e.preventDefault();
+    const d = dim();
+    const before = fieldOf(ev(D.events.find(x => x.event_id === dragId)), d.key);
+    if (before !== col.dataset.value) {
+      setField(dragId, d.key, col.dataset.value);
+      toast(`${d.label}：${before} → ${col.dataset.value}`);
+    }
+  });
+
+  const drawer = $("#drawer");
+  drawer.addEventListener("click", e => {
+    if (e.target.closest("#d-close")) closeDrawer();
+    if (e.target.closest("#d-revert")) { delete edits[current]; store.set(KEY, edits); renderToolbar(); render(); toast("已恢复为原始值"); }
+  });
+  drawer.addEventListener("change", e => { const f = e.target.dataset.f; if (f && current) setField(current, f, e.target.value); });
+  $("#scrim").addEventListener("click", closeDrawer);
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && current) closeDrawer();
+    if (e.key === "/" && document.activeElement.tagName !== "INPUT") { e.preventDefault(); $("#q").focus(); }
+  });
+
+  $("#btn-reset").addEventListener("click", () => {
+    if (!confirm(`撤销本浏览器中对 ${Object.keys(edits).length} 个事件的修改？`)) return;
+    edits = {};
+    store.del(KEY);
+    renderToolbar();
+    render();
+  });
+  $("#btn-export").addEventListener("click", () => {
+    const body = events().map(e => JSON.stringify(e)).join("\n") + "\n";
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([body], { type: "application/x-ndjson" }));
+    a.download = "events.board.jsonl";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+    toast(`已导出 ${D.events.length} 个事件（含 ${Object.keys(edits).length} 处修改）`);
+  });
+  const root = document.documentElement;
+  const savedTheme = store.get("aes-board:theme", "");
+  if (savedTheme) root.dataset.theme = savedTheme;
+  $("#btn-theme").addEventListener("click", () => {
+    const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark";
+    store.set("aes-board:theme", root.dataset.theme);
+  });
+
+  renderToolbar();
+  render();
+})();
+</script>
+</body>
+</html>

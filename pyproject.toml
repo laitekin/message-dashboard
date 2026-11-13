@@ -23,7 +23,7 @@ aes = "aftersales_events.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-aftersales_events = ["prompts/*.md"]
+aftersales_events = ["prompts/*.md", "templates/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

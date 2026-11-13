@@ -8,10 +8,11 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .config import Settings
+from .board import write_board
+from .config import EventTypeDef, Settings
 from .extract import Extractor, dump_extraction, to_events
 from .merge import merge_events
-from .models import Event, RawResponse, Window
+from .models import Event, Message, RawResponse, Window
 from .preprocess import preprocess
 from .segment import segment
 
@@ -59,17 +60,24 @@ def run(raw: RawResponse, settings: Settings, extractor: Extractor, out_dir: str
         "by_type": {t.name: sum(1 for e in events if e.type == t.name) for t in types},
     }
     if out:
-        write_outputs(events, stats, out)
+        write_outputs(events, stats, out, types=types, messages=messages)
     return RunResult(events=events, windows=windows, stats=stats)
 
 
-def write_outputs(events: list[Event], stats: dict, out: Path) -> None:
+def write_outputs(
+    events: list[Event],
+    stats: dict,
+    out: Path,
+    types: list[EventTypeDef] | None = None,
+    messages: list[Message] | None = None,
+) -> None:
     out.mkdir(parents=True, exist_ok=True)
     with (out / "events.jsonl").open("w", encoding="utf-8") as f:
         for e in events:
             f.write(e.model_dump_json() + "\n")
     (out / "stats.json").write_text(json.dumps(stats, ensure_ascii=False, indent=2), encoding="utf-8")
     (out / "report.md").write_text(render_report(events, stats), encoding="utf-8")
+    write_board(out / "board.html", events, types, messages)
 
 
 def render_report(events: list[Event], stats: dict) -> str:

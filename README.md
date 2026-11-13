@@ -17,8 +17,8 @@
 ## 流水线
 
 ```
-拉取(raw JSON) → 规则预处理 → 会话切分 → LLM 抽取 → 事件合并 → 输出 / 评估
-   fetch.py       preprocess.py   segment.py   extract.py   merge.py   pipeline.py / evaluate.py
+拉取(raw JSON) → 规则预处理 → 会话切分 → LLM 抽取 → 事件合并 → 输出 / 评估 / 看板
+   fetch.py       preprocess.py   segment.py   extract.py   merge.py   pipeline.py / evaluate.py / board.py
 ```
 
 | 阶段 | 做什么 |
@@ -28,6 +28,7 @@
 | 抽取 | 消息用窗口内短编号 `m1..mN` 表示，模型只需引用编号，由代码映射回真实 ID 和时间；用结构化输出直接得到 JSON；校验证据编号，无效编号丢弃，没有有效证据的事件整体丢弃 |
 | 合并 | 同群、同类型的事件，证据有交集，或时间相近且标题相似，就合并成一个；状态取时间上更晚的那条，等级取更高的那条 |
 | 评估 | 和人工标注对比，按类型输出 P/R/F1，以及状态、等级字段的准确率 |
+| 看板 | 把事件渲染成单文件 HTML 看板，按状态/类型/等级/跟进人分列，可筛选、拖拽改状态、查看证据原文 |
 
 每个事件的字段：`type, title, summary, status, level, owner, customer_uid, group_*, start_time, end_time, evidence_msg_ids, attributes, confidence`。
 
@@ -49,12 +50,27 @@ aes preview --input tests/fixtures/sample_response.json
 # 2. 配置自己的数据源后，拉取数据 → data/raw/
 AES_FETCH_URL=https://api.example.com/chat-records aes fetch --uid 1380000001 --start 2026-11-10 --end 2026-11-12
 
-# 3. 完整抽取（需要 ANTHROPIC_API_KEY）→ out/<uid>_<时间>/events.jsonl、report.md
+# 3. 完整抽取（需要 ANTHROPIC_API_KEY）→ out/<uid>_<时间>/events.jsonl、report.md、board.html
 aes -v run --input tests/fixtures/sample_response.json
 
 # 4. 和人工标注对比
 aes eval --pred out/.../events.jsonl --gold eval/gold/xxx.jsonl
+
+# 5. 把多次运行的结果汇总成一个看板（默认扫描 out/ 下所有 events.jsonl）
+aes board out/ --input data/raw/1380000001_2026-11-10_2026-11-12.json --out out/board.html
 ```
+
+## 事件看板
+
+每次 `aes run` 都会在输出目录生成 `board.html`；`aes board` 可以把多个目录、多个客户的结果合成一个看板。页面是单个 HTML 文件，数据内嵌，不需要起服务，浏览器直接打开即可。
+
+- **分列**：按 状态 / 类型 / 等级 / 跟进人 切换；按类型分列时，列头显示推送对象。
+- **指标**：事件总数、未关闭、P0/P1 未关闭、超 24 小时无动态、平均置信度，随筛选联动。
+- **筛选**：关键词搜索（标题、摘要、群名、UID、属性，按 `/` 聚焦）、类型、等级、群、跟进人、只看未关闭。
+- **处理**：拖拽卡片到另一列即修改该字段，也可以在详情面板里改状态、等级、类型、跟进人。修改只保存在当前浏览器，点「导出 JSONL」得到修改后的 `events.board.jsonl`，可再交给 `aes eval` 或下游使用。
+- **证据**：详情面板列出证据消息原文（经过预处理脱敏）。`aes board` 需要加 `--input 原始数据.json` 才能显示原文，否则只显示消息 ID。
+
+> 看板里含有聊天原文，默认写在 `out/` 下（已在 `.gitignore` 中），请不要提交或外传。
 
 如果需要从另一台机器的 Docker 容器访问数据源，可在本地配置 `fetch.mode: docker`、`fetch.container` 和 `fetch.ssh_prefix: ["ssh", "user@host"]`。
 
@@ -87,4 +103,5 @@ aes eval --pred out/.../events.jsonl --gold eval/gold/xxx.jsonl
 - [ ] 图片消息：OCR 或多模态识别（目前只标记为 `<图片>`）
 - [ ] 跨天增量：维护未关闭事件库，新窗口优先更新已有事件
 - [ ] 第二阶段：接入监控数据、账单用量（用量骤降作为流失信号，骤升作为商机或资源需求信号）
+- [x] 事件看板：单文件 HTML，分列/筛选/拖拽改状态/证据原文
 - [ ] 二级输出：按事件类型推送给对应角色，生成日报/周报
