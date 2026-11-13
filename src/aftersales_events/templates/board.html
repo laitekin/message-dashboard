@@ -3,509 +3,982 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>__AES_TITLE__</title>
 <style>
 :root {
-  --bg: #f4f5f7; --surface: #ffffff; --surface-2: #eef0f3; --border: #dde1e6;
-  --text: #1c2026; --muted: #646b75; --accent: #2f6fed; --accent-soft: #e5eeff;
-  --p0: #d4351c; --p1: #e8780c; --p2: #2f6fed; --p3: #7a828d;
-  --ok: #1a8a4a; --warn: #b26a00; --on-solid: #ffffff; --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
-  --t0: #2f6fed; --t1: #d4351c; --t2: #7b4ddb; --t3: #0f8f8a; --t4: #c2410c; --t5: #a1468f; --t6: #4b6b1f; --t7: #5c6670;
+  --bg: #ffffff; --sidebar: #f7f7f8; --panel: #ffffff; --hover: #f1f1f3; --active: #e9e9ec;
+  --border: #ececf0; --border-2: #dedee3; --text: #1b1b1f; --text-2: #3d3d44; --muted: #85858d; --faint: #b4b4bb;
+  --accent: #5e6ad2; --accent-soft: rgba(94,106,210,.12); --on-accent: #ffffff;
+  --s-new: #8a8a93; --s-prog: #e0a400; --s-done: #5e6ad2; --s-closed: #a9a9b1; --urgent: #f2555a; --warn: #c27a00;
+  --pop-shadow: 0 0 0 1px rgba(0,0,0,.07), 0 8px 28px rgba(0,0,0,.12), 0 2px 6px rgba(0,0,0,.06);
+  --row-sel: rgba(94,106,210,.08);
+  --t0: #5e6ad2; --t1: #eb5757; --t2: #9b51e0; --t3: #0fa5a0; --t4: #f2994a; --t5: #d6409f; --t6: #4cb782; --t7: #8a8a93;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #111418; --surface: #1a1e24; --surface-2: #232830; --border: #2e343d;
-    --text: #e6e8eb; --muted: #9aa2ad; --accent: #6b9bff; --accent-soft: #1d2a45;
-    --p0: #ff6b55; --p1: #ffa14a; --p2: #6b9bff; --p3: #8e97a3;
-    --ok: #4cc785; --warn: #e0a640; --on-solid: #111418; --shadow: 0 1px 2px rgba(0,0,0,.4);
-    --t0: #6b9bff; --t1: #ff7a66; --t2: #a98bff; --t3: #3cc9c2; --t4: #ff9a5c; --t5: #e08ad0; --t6: #9ccc5a; --t7: #9aa2ad;
+    --bg: #101012; --sidebar: #0b0b0d; --panel: #141417; --hover: #1b1b1f; --active: #232328;
+    --border: #1f1f24; --border-2: #2b2b31; --text: #ededf0; --text-2: #c6c6cc; --muted: #7d7d86; --faint: #4a4a52;
+    --accent: #7c85f0; --accent-soft: rgba(124,133,240,.16); --on-accent: #0b0b0d;
+    --s-new: #8f8f98; --s-prog: #f2c94c; --s-done: #7c85f0; --s-closed: #5d5d66; --urgent: #ff6b6b; --warn: #e5a83a;
+    --pop-shadow: 0 0 0 1px rgba(255,255,255,.07), 0 10px 32px rgba(0,0,0,.55);
+    --row-sel: rgba(124,133,240,.12);
+    --t0: #7c85f0; --t1: #ff7a7a; --t2: #b98af0; --t3: #3ccfc8; --t4: #f5ab6b; --t5: #ef77bd; --t6: #6fd39f; --t7: #8f8f98;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #111418; --surface: #1a1e24; --surface-2: #232830; --border: #2e343d;
-  --text: #e6e8eb; --muted: #9aa2ad; --accent: #6b9bff; --accent-soft: #1d2a45;
-  --p0: #ff6b55; --p1: #ffa14a; --p2: #6b9bff; --p3: #8e97a3;
-  --ok: #4cc785; --warn: #e0a640; --on-solid: #111418; --shadow: 0 1px 2px rgba(0,0,0,.4);
-  --t0: #6b9bff; --t1: #ff7a66; --t2: #a98bff; --t3: #3cc9c2; --t4: #ff9a5c; --t5: #e08ad0; --t6: #9ccc5a; --t7: #9aa2ad;
+  --bg: #101012; --sidebar: #0b0b0d; --panel: #141417; --hover: #1b1b1f; --active: #232328;
+  --border: #1f1f24; --border-2: #2b2b31; --text: #ededf0; --text-2: #c6c6cc; --muted: #7d7d86; --faint: #4a4a52;
+  --accent: #7c85f0; --accent-soft: rgba(124,133,240,.16); --on-accent: #0b0b0d;
+  --s-new: #8f8f98; --s-prog: #f2c94c; --s-done: #7c85f0; --s-closed: #5d5d66; --urgent: #ff6b6b; --warn: #e5a83a;
+  --pop-shadow: 0 0 0 1px rgba(255,255,255,.07), 0 10px 32px rgba(0,0,0,.55);
+  --row-sel: rgba(124,133,240,.12);
+  --t0: #7c85f0; --t1: #ff7a7a; --t2: #b98af0; --t3: #3ccfc8; --t4: #f5ab6b; --t5: #ef77bd; --t6: #6fd39f; --t7: #8f8f98;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; }
+html, body { margin: 0; height: 100%; }
 body {
-  background: var(--bg); color: var(--text);
-  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
-  min-height: 100vh; display: flex; flex-direction: column;
+  background: var(--bg); color: var(--text); overflow: hidden;
+  font: 13px/1.5 "Inter", "Inter var", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased; font-feature-settings: "cv11", "ss01";
 }
-button, select, input { font: inherit; color: inherit; }
-button { cursor: pointer; }
-.wrap { padding: 16px 20px; }
-header.top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-bottom: 8px; }
-header.top h1 { font-size: 18px; margin: 0; font-weight: 650; }
-header.top .meta { color: var(--muted); font-size: 12px; }
-header.top .spacer { flex: 1; }
-.btn {
-  border: 1px solid var(--border); background: var(--surface); border-radius: 8px;
-  padding: 5px 10px; font-size: 13px; line-height: 1.4;
-}
-.btn:hover { border-color: var(--accent); }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-solid); }
-.btn.icon { padding: 5px 8px; display: inline-flex; align-items: center; }
-.btn[disabled] { opacity: .45; cursor: default; }
-.btn:focus-visible, select:focus-visible, input:focus-visible, .card:focus-visible, .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; background: none; border: 0; padding: 0; }
+svg { display: block; flex: none; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; border-radius: 4px; }
+.muted { color: var(--muted); }
 
-/* KPI */
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 6px 0 14px; }
-.kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; }
-.kpi .label { color: var(--muted); font-size: 12px; }
-.kpi .value { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
-.kpi .sub { color: var(--muted); font-size: 12px; }
-.kpi.alert .value { color: var(--p0); }
+.app { display: grid; grid-template-columns: 232px 1fr; height: 100vh; height: 100dvh; }
 
-/* toolbar */
-.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
-.toolbar input[type=search] {
-  flex: 1 1 220px; min-width: 0; background: var(--surface); border: 1px solid var(--border);
-  border-radius: 8px; padding: 6px 10px;
+/* ---------------------------------------------------------------- sidebar */
+.sidebar { background: var(--sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
+.ws { display: flex; align-items: center; gap: 8px; padding: 12px 14px 10px; }
+.ws .logo { width: 22px; height: 22px; border-radius: 6px; background: linear-gradient(135deg, var(--accent), var(--t2)); color: #fff; display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+.ws .name { font-weight: 600; font-size: 13.5px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.side-scroll { overflow-y: auto; padding: 4px 8px 12px; flex: 1; min-height: 0; }
+.nav-sec { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 12px; font-weight: 500; padding: 14px 8px 4px; }
+.nav-item {
+  display: flex; align-items: center; gap: 9px; width: 100%; padding: 0 8px; height: 28px; border-radius: 6px;
+  color: var(--text-2); text-align: left; font-size: 13px;
 }
-.toolbar select { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; max-width: min(240px, 100%); }
-.toolbar label.check { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 13px; white-space: nowrap; }
-.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
-.seg button { border: 0; background: transparent; padding: 5px 10px; font-size: 13px; color: var(--muted); }
-.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-.chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
-.chip {
-  border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 2px 10px;
-  font-size: 12px; display: inline-flex; align-items: center; gap: 6px; color: var(--muted);
-}
-.chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c, var(--muted)); }
-.chip[aria-pressed="true"] { border-color: var(--c, var(--accent)); color: var(--text); background: var(--surface-2); }
-.chip .n { font-variant-numeric: tabular-nums; }
+.nav-item:hover { background: var(--hover); }
+.nav-item[aria-current="true"] { background: var(--active); color: var(--text); font-weight: 500; }
+.nav-item .lab { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nav-item .n { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.nav-item .ico { width: 16px; display: grid; place-items: center; color: var(--muted); }
+.side-foot { border-top: 1px solid var(--border); padding: 8px 10px; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.side-foot .sync { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.side-foot .dotlive { width: 6px; height: 6px; border-radius: 50%; background: var(--t6); flex: none; }
+.side-foot .dotlive.off { background: var(--faint); }
 
-/* board */
-main.board {
-  flex: 1; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(270px, 1fr);
-  gap: 12px; overflow-x: auto; padding: 0 20px 20px; align-items: start;
-}
-.col { background: var(--surface-2); border-radius: 12px; display: flex; flex-direction: column; max-height: calc(100vh - 120px); min-height: 120px; }
-.col.drop { outline: 2px dashed var(--accent); outline-offset: -2px; }
-.col header { display: flex; align-items: center; gap: 8px; padding: 10px 12px 6px; font-weight: 600; }
-.col header .count { color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; }
-.col header .bar { width: 4px; height: 14px; border-radius: 2px; background: var(--c, var(--muted)); }
-.col header .hint { margin-left: auto; color: var(--muted); font-size: 11px; font-weight: 400; }
-.col .list { overflow-y: auto; padding: 4px 8px 10px; display: flex; flex-direction: column; gap: 8px; }
-.col .empty { color: var(--muted); font-size: 12px; text-align: center; padding: 18px 0; }
+/* ---------------------------------------------------------------- main */
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.topbar { height: 46px; display: flex; align-items: center; gap: 8px; padding: 0 12px 0 18px; border-bottom: 1px solid var(--border); flex: none; }
+.crumb { display: flex; align-items: center; gap: 6px; font-weight: 500; min-width: 0; white-space: nowrap; }
+.crumb .count { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
+.spacer { flex: 1; }
+.search { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); width: 240px; color: var(--muted); }
+.search:focus-within { border-color: var(--accent); }
+.search input { border: 0; background: transparent; outline: 0; flex: 1; min-width: 0; color: var(--text); }
+.kbd { font-size: 11px; color: var(--muted); border: 1px solid var(--border-2); border-radius: 4px; padding: 0 4px; line-height: 16px; font-family: inherit; }
+.btn { height: 28px; padding: 0 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); border: 1px solid var(--border-2); background: var(--panel); white-space: nowrap; }
+.btn:hover { background: var(--hover); }
+.btn.ghost { border-color: transparent; background: transparent; }
+.btn.ghost:hover { background: var(--hover); }
+.btn.primary { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+.seg { display: inline-flex; border: 1px solid var(--border-2); border-radius: 6px; padding: 2px; gap: 2px; }
+.seg button { height: 22px; padding: 0 6px; border-radius: 4px; color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
+.seg button[aria-pressed="true"] { background: var(--active); color: var(--text); }
+.icon-btn { width: 28px; height: 28px; border-radius: 6px; display: grid; place-items: center; color: var(--muted); }
+.icon-btn:hover { background: var(--hover); color: var(--text); }
+.only-mobile { display: none; }
 
-.card {
-  background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--lc, var(--border));
-  border-radius: 9px; padding: 9px 10px; box-shadow: var(--shadow); cursor: pointer; text-align: left; width: 100%;
+.filterbar { display: flex; align-items: center; gap: 6px; padding: 7px 12px 7px 18px; border-bottom: 1px solid var(--border); flex-wrap: wrap; flex: none; }
+.fchip { display: inline-flex; align-items: stretch; height: 24px; border: 1px solid var(--border-2); border-radius: 6px; overflow: hidden; font-size: 12px; background: var(--panel); }
+.fchip > * { display: inline-flex; align-items: center; gap: 5px; padding: 0 7px; }
+.fchip .k { color: var(--muted); }
+.fchip .op { color: var(--muted); padding: 0 2px; }
+.fchip .v { border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
+.fchip button:hover { background: var(--hover); }
+.fadd { height: 24px; padding: 0 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; }
+.fadd:hover { background: var(--hover); color: var(--text); }
+.stats { margin-left: auto; display: flex; gap: 14px; color: var(--muted); font-size: 12px; white-space: nowrap; }
+.stats b { color: var(--text-2); font-weight: 600; font-variant-numeric: tabular-nums; }
+.stats .hot b { color: var(--urgent); }
+
+.content { flex: 1; min-height: 0; overflow: auto; position: relative; }
+
+/* ---------------------------------------------------------------- list */
+.ghead {
+  position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 18px 0 12px;
+  background: var(--sidebar); border-bottom: 1px solid var(--border); font-weight: 500; cursor: pointer; user-select: none;
 }
-.card:hover { border-color: var(--accent); border-left-color: var(--lc); }
-.card.dragging { opacity: .4; }
-.row1 { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
-.lvl { font-size: 11px; font-weight: 700; padding: 0 6px; border-radius: 4px; color: var(--on-solid); background: var(--lc); line-height: 18px; }
-.tag { font-size: 11px; padding: 0 6px; border-radius: 4px; line-height: 18px; color: var(--c); border: 1px solid currentColor; }
-.st { font-size: 11px; color: var(--muted); }
-.edited { font-size: 11px; color: var(--warn); margin-left: auto; }
-.card .title { font-weight: 600; margin: 2px 0 4px; word-break: break-word; }
-.card .sum { color: var(--muted); font-size: 12px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.card .foot { display: flex; gap: 10px; flex-wrap: wrap; color: var(--muted); font-size: 12px; margin-top: 6px; }
-.card .foot .stale { color: var(--warn); }
-.conf { display: inline-flex; align-items: center; gap: 4px; }
-.conf i { display: inline-block; width: 28px; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; position: relative; }
+.ghead .caret { width: 16px; height: 16px; display: grid; place-items: center; color: var(--muted); transition: transform .12s; }
+.ghead.closed .caret { transform: rotate(-90deg); }
+.ghead .gcount { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
+.row {
+  display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 18px 0 22px; border-bottom: 1px solid var(--border);
+  cursor: default; outline: none;
+}
+.row:hover { background: var(--hover); }
+.row.cur { background: var(--row-sel); box-shadow: inset 2px 0 0 var(--accent); }
+.ib { width: 22px; height: 22px; border-radius: 5px; display: grid; place-items: center; color: var(--muted); flex: none; }
+.ib:hover { background: var(--active); }
+.ident { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; width: 62px; flex: none; white-space: nowrap; }
+.rtitle { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; color: var(--text); }
+.rtitle .sub { color: var(--muted); font-weight: 400; margin-left: 8px; }
+.mod { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--warn); margin-left: 6px; vertical-align: middle; }
+.rmeta { display: flex; align-items: center; gap: 8px; flex: none; }
+.lbl { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border: 1px solid var(--border-2); border-radius: 999px; font-size: 12px; color: var(--text-2); white-space: nowrap; max-width: 200px; }
+.lbl .t { overflow: hidden; text-overflow: ellipsis; }
+.lbl.plain { border-color: transparent; color: var(--muted); padding: 0 2px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex: none; }
+.date { color: var(--muted); font-size: 12px; width: 58px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.date.stale { color: var(--warn); }
+.av { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 10.5px; font-weight: 600; color: #fff; background: hsl(var(--h) 52% 52%); flex: none; }
+.av.lg { width: 22px; height: 22px; font-size: 11px; }
+
+.empty { display: grid; place-items: center; text-align: center; color: var(--muted); padding: 80px 20px; gap: 10px; }
+.empty h3 { margin: 0; color: var(--text); font-size: 14px; font-weight: 600; }
+.empty p { margin: 0; max-width: 360px; }
+
+/* ---------------------------------------------------------------- board */
+.kanban { display: flex; gap: 10px; padding: 12px 18px 18px; height: 100%; align-items: flex-start; min-width: min-content; }
+.kcol { width: 300px; flex: none; display: flex; flex-direction: column; max-height: 100%; border-radius: 8px; }
+.kcol.drop { background: var(--accent-soft); }
+.khead { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 6px; font-weight: 500; flex: none; }
+.khead .gcount { color: var(--muted); font-weight: 400; }
+.klist { overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 2px 2px 8px; min-height: 60px; }
+.kcard {
+  background: var(--panel); border: 1px solid var(--border-2); border-radius: 8px; padding: 10px 12px; cursor: default;
+  box-shadow: 0 1px 1px rgba(0,0,0,.03); display: flex; flex-direction: column; gap: 6px;
+}
+.kcard:hover { border-color: var(--faint); }
+.kcard.cur { border-color: var(--accent); }
+.kcard.dragging { opacity: .4; }
+.kcard .k1 { display: flex; align-items: center; gap: 6px; }
+.kcard .k1 .ident { width: auto; }
+.kcard .k2 { display: flex; gap: 7px; align-items: flex-start; font-weight: 500; line-height: 1.4; word-break: break-word; }
+.kcard .k2 svg { margin-top: 2px; }
+.kcard .k3 { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.kcard .k3 .ib { border: 1px solid var(--border-2); }
+.kempty { color: var(--faint); font-size: 12px; text-align: center; padding: 14px 0; border: 1px dashed var(--border-2); border-radius: 8px; }
+
+/* ---------------------------------------------------------------- peek */
+.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.18); opacity: 0; pointer-events: none; transition: opacity .15s; z-index: 20; }
+.scrim.on { opacity: 1; pointer-events: auto; }
+.peek {
+  position: fixed; top: 8px; right: 8px; bottom: 8px; width: min(900px, calc(100vw - 16px)); background: var(--panel);
+  border-radius: 10px; box-shadow: var(--pop-shadow); transform: translateX(calc(100% + 16px)); transition: transform .2s cubic-bezier(.2,.8,.2,1);
+  display: flex; flex-direction: column; z-index: 21; overflow: hidden;
+}
+.peek.on { transform: none; }
+.ph { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 10px 0 18px; border-bottom: 1px solid var(--border); flex: none; }
+.ph .path { display: flex; align-items: center; gap: 6px; color: var(--muted); min-width: 0; white-space: nowrap; }
+.ph .path b { color: var(--text); font-weight: 500; }
+.pbody { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 268px; }
+.pmain { overflow-y: auto; padding: 26px 36px 40px; }
+.pmain h1 { font-size: 20px; line-height: 1.35; margin: 0 0 10px; font-weight: 600; letter-spacing: -.01em; word-break: break-word; }
+.psum { color: var(--text-2); font-size: 14px; line-height: 1.65; margin: 0 0 22px; white-space: pre-wrap; }
+.psec { margin-top: 26px; }
+.psec > h4 { font-size: 13px; font-weight: 600; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+.psec > h4 .n { color: var(--muted); font-weight: 400; }
+.attrs { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; }
+.attrs dt { color: var(--muted); }
+.attrs dd { margin: 0; word-break: break-word; }
+.tl { position: relative; padding-left: 4px; }
+.tl-item { display: flex; gap: 10px; padding: 6px 0; position: relative; }
+.tl-item::before { content: ""; position: absolute; left: 10px; top: 30px; bottom: -6px; width: 1px; background: var(--border-2); }
+.tl-item:last-child::before { display: none; }
+.tl-body { flex: 1; min-width: 0; }
+.tl-head { color: var(--muted); font-size: 12px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-height: 22px; }
+.tl-head b { color: var(--text); font-weight: 500; }
+.bubble { margin-top: 4px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; white-space: pre-wrap; word-break: break-word; background: var(--bg); }
+.bubble.inner { border-color: var(--accent-soft); background: var(--accent-soft); }
+.tl-ico { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--panel); border: 1px solid var(--border-2); color: var(--muted); flex: none; position: relative; z-index: 1; }
+.code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: var(--muted); word-break: break-all; }
+.pside { border-left: 1px solid var(--border); overflow-y: auto; padding: 16px 14px; background: var(--sidebar); }
+.prop { display: grid; grid-template-columns: 74px 1fr; align-items: center; gap: 8px; min-height: 32px; }
+.prop > span:first-child { color: var(--muted); }
+.pbtn { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-radius: 6px; min-width: 0; text-align: left; }
+.pbtn:hover { background: var(--hover); }
+.pbtn .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pval { padding: 4px 8px; word-break: break-word; }
+.pdiv { height: 1px; background: var(--border); margin: 12px 0; }
+.conf { display: inline-flex; align-items: center; gap: 8px; }
+.conf i { width: 60px; height: 4px; border-radius: 2px; background: var(--border-2); position: relative; overflow: hidden; }
 .conf i b { position: absolute; inset: 0 auto 0 0; background: var(--accent); }
 
-/* drawer */
-.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.25); opacity: 0; pointer-events: none; transition: opacity .15s; }
-.scrim.on { opacity: 1; pointer-events: auto; }
-aside.drawer {
-  position: fixed; top: 0; right: 0; height: 100vh; width: min(520px, 100vw); background: var(--surface);
-  border-left: 1px solid var(--border); transform: translateX(100%); transition: transform .18s ease;
-  display: flex; flex-direction: column; z-index: 10;
-}
-aside.drawer.on { transform: none; }
-.drawer .dh { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); }
-.drawer .dh h2 { font-size: 16px; margin: 6px 0 2px; word-break: break-word; }
-.drawer .close { float: right; border: 0; background: transparent; font-size: 20px; line-height: 1; color: var(--muted); padding: 2px 6px; }
-.drawer .db { padding: 12px 16px 24px; overflow-y: auto; }
-.drawer section { margin-bottom: 16px; }
-.drawer h3 { font-size: 12px; color: var(--muted); font-weight: 600; margin: 0 0 6px; text-transform: uppercase; letter-spacing: .02em; }
-.kv { display: grid; grid-template-columns: 84px 1fr; gap: 4px 10px; font-size: 13px; }
-.kv dt { color: var(--muted); }
-.kv dd { margin: 0; word-break: break-word; }
-.edit { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
-.edit label { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 3px; }
-.edit select, .edit input { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; }
-.msg { border-left: 2px solid var(--border); padding: 4px 0 4px 10px; margin-bottom: 8px; }
-.msg.in { border-left-color: var(--accent); }
-.msg .mh { font-size: 12px; color: var(--muted); }
-.msg .mc { white-space: pre-wrap; word-break: break-word; }
-.ids { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--muted); word-break: break-all; }
+/* ---------------------------------------------------------------- popover */
+.pop { position: fixed; z-index: 40; min-width: 220px; max-width: 320px; background: var(--panel); border-radius: 8px; box-shadow: var(--pop-shadow); display: none; overflow: hidden; }
+.pop.on { display: block; }
+.pop .pin { display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 38px; border-bottom: 1px solid var(--border); }
+.pop .pin input { border: 0; outline: 0; background: transparent; flex: 1; min-width: 0; }
+.pop .plist { max-height: 320px; overflow-y: auto; padding: 4px; }
+.pop .opt { display: flex; align-items: center; gap: 9px; width: 100%; height: 32px; padding: 0 8px; border-radius: 5px; text-align: left; color: var(--text-2); }
+.pop .opt.sel { background: var(--hover); color: var(--text); }
+.pop .opt .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pop .opt .h { color: var(--muted); font-size: 12px; }
+.pop .opt .chk { color: var(--accent); }
+.pop .none { color: var(--muted); padding: 10px 12px; }
+.pop .panel { padding: 12px; display: grid; gap: 12px; width: 280px; }
+.pop .panel .r { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pop .panel .r > span { color: var(--muted); }
+.pop .panel select { height: 28px; border: 1px solid var(--border-2); border-radius: 6px; background: var(--bg); padding: 0 6px; min-width: 130px; }
+.pop .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.pop .layout button { border: 1px solid var(--border-2); border-radius: 6px; height: 54px; display: grid; place-items: center; gap: 2px; color: var(--muted); font-size: 12px; padding: 6px 0; }
+.pop .layout button[aria-pressed="true"] { border-color: var(--accent); color: var(--text); background: var(--accent-soft); }
+.pop .sep { height: 1px; background: var(--border); margin: 0 -12px; }
+.pop .panel .acts { display: flex; gap: 6px; flex-wrap: wrap; }
 
-.toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 6px 14px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 20; }
-.toast.on { opacity: .92; }
+.toast { position: fixed; left: 50%; bottom: 20px; transform: translate(-50%, 8px); background: var(--panel); color: var(--text); box-shadow: var(--pop-shadow); border-radius: 8px; padding: 8px 14px; font-size: 13px; opacity: 0; transition: opacity .15s, transform .15s; pointer-events: none; z-index: 50; display: flex; gap: 8px; align-items: center; }
+.toast.on { opacity: 1; transform: translate(-50%, 0); }
+.toast.err { color: var(--urgent); }
 
-@media (max-width: 720px) {
-  .wrap { padding: 12px 16px; }
-  main.board { grid-auto-flow: row; grid-auto-columns: auto; grid-template-columns: 1fr; padding: 0 16px 16px; overflow-x: visible; }
-  .col { max-height: none; }
-  .kpi .value { font-size: 19px; }
+/* ---------------------------------------------------------------- responsive */
+@media (max-width: 1100px) { .stats { display: none; } }
+@media (max-width: 860px) {
+  .app { grid-template-columns: 1fr; }
+  .sidebar { position: fixed; inset: 0 auto 0 0; width: 260px; z-index: 30; transform: translateX(-100%); transition: transform .18s; box-shadow: var(--pop-shadow); }
+  .sidebar.on { transform: none; }
+  .only-mobile { display: grid; }
+  .search { width: auto; flex: 1; min-width: 0; }
+  .topbar .crumb .count, .topbar .spacer { display: none; }
+  .topbar { padding: 0 10px; }
+  .filterbar { padding: 6px 10px; }
+  .row { padding: 0 10px; gap: 8px; }
+  .ghead { padding: 0 10px 0 6px; }
+  .ident, .rmeta .cust, .rmeta .typ { display: none; }
+  .kanban { padding: 10px; }
+  .kcol { width: 82vw; }
+  .peek { top: 0; right: 0; bottom: 0; width: 100vw; border-radius: 0; }
+  .pbody { grid-template-columns: 1fr; overflow-y: auto; display: block; }
+  .pmain { overflow: visible; padding: 18px 16px 8px; }
+  .pside { border-left: 0; border-top: 1px solid var(--border); overflow: visible; }
+  .kbd { display: none; }
 }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header class="top">
-    <h1 id="title"></h1>
-    <span class="meta" id="meta"></span>
-    <span class="spacer"></span>
-    <button class="btn" id="btn-reset" title="清除在本浏览器里做的所有修改">撤销修改</button>
-    <button class="btn primary" id="btn-export" title="导出应用了修改后的 events.jsonl">导出 JSONL</button>
-    <button class="btn icon" id="btn-theme" title="切换明暗主题" aria-label="切换明暗主题"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5a6.5 6.5 0 0 1 0 13z" fill="currentColor"/></svg></button>
-  </header>
-  <div class="kpis" id="kpis"></div>
-  <div class="toolbar">
-    <input type="search" id="q" placeholder="搜索标题 / 摘要 / 群名 / 客户 UID / 属性…" aria-label="搜索">
-    <span class="seg" id="dims" role="group" aria-label="列分组"></span>
-    <select id="f-level" aria-label="等级"><option value="">全部等级</option></select>
-    <select id="f-group" aria-label="群"><option value="">全部群</option></select>
-    <select id="f-owner" aria-label="跟进人"><option value="">全部跟进人</option></select>
-    <label class="check"><input type="checkbox" id="f-open"> 只看未关闭</label>
+<div class="app">
+  <aside class="sidebar" id="sidebar" aria-label="导航">
+    <div class="ws"><div class="logo">售</div><div class="name" id="ws-name"></div>
+      <button class="icon-btn" id="btn-theme" title="切换明暗主题" aria-label="切换明暗主题"></button></div>
+    <div class="side-scroll">
+      <nav id="nav-views"></nav>
+      <div class="nav-sec">事件类型</div>
+      <nav id="nav-types"></nav>
+      <div class="nav-sec">客户群</div>
+      <nav id="nav-groups"></nav>
+    </div>
+    <div class="side-foot"><span class="sync" id="sync"></span></div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-btn only-mobile" id="btn-menu" aria-label="打开导航"></button>
+      <div class="crumb"><span id="view-icon"></span><span id="view-name"></span><span class="count" id="view-count"></span></div>
+      <div class="spacer"></div>
+      <label class="search"><span id="search-ico"></span><input id="q" type="search" placeholder="搜索事件" aria-label="搜索事件" autocomplete="off"><span class="kbd">/</span></label>
+      <div class="seg" id="layout-seg" role="group" aria-label="布局"></div>
+      <button class="btn" id="btn-display"><span id="display-ico"></span><span>显示</span></button>
+    </header>
+    <div class="filterbar" id="filterbar"></div>
+    <div class="content" id="content" tabindex="-1"></div>
   </div>
-  <div class="chips" id="type-chips" role="group" aria-label="事件类型"></div>
 </div>
-<main class="board" id="board"></main>
+
 <div class="scrim" id="scrim"></div>
-<aside class="drawer" id="drawer" aria-hidden="true" role="dialog" aria-label="事件详情"></aside>
-<div class="toast" id="toast"></div>
+<section class="peek" id="peek" role="dialog" aria-modal="false" aria-label="事件详情" aria-hidden="true"></section>
+<div class="pop" id="pop" role="dialog"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script type="application/json" id="aes-data">__AES_DATA__</script>
 <script>
 (function () {
   "use strict";
-  const D = JSON.parse(document.getElementById("aes-data").textContent);
+  let D = JSON.parse(document.getElementById("aes-data").textContent);
+  const API = !!D.api;
   const $ = (s, el) => (el || document).querySelector(s);
+  const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const store = {
     get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* 隐私模式等情况下忽略 */ } },
     del(k) { try { localStorage.removeItem(k); } catch (e) {} },
   };
-  const KEY = "aes-board:" + D.board_id;
+
+  // ============================================================ 图标
+  const I = {
+    stack: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="2.5" width="11" height="11" rx="2.5"/><path d="M5.5 6h5M5.5 8.5h5M5.5 11h3" stroke-linecap="round"/></svg>',
+    open: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="5.5"/><path d="M8 4.8a3.2 3.2 0 0 1 0 6.4z" fill="currentColor" stroke="none"/></svg>',
+    fire: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="2.5" width="11" height="11" rx="2.5"/><path d="M8 5v3.6" stroke-linecap="round"/><circle cx="8" cy="10.8" r=".6" fill="currentColor"/></svg>',
+    clock: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.2l2 1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    user: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="5.8" stroke-dasharray="2 1.6"/></svg>',
+    users: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="6" cy="6" r="2.3"/><path d="M2.5 12.5c.5-2 1.9-3 3.5-3s3 1 3.5 3" stroke-linecap="round"/><path d="M10.3 4.2a2.2 2.2 0 0 1 0 3.9M11.6 9.7c1 .4 1.6 1.3 1.9 2.8" stroke-linecap="round"/></svg>',
+    search: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3" stroke-linecap="round"/></svg>',
+    list: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 4h11M2.5 8h11M2.5 12h11"/></svg>',
+    board: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2.5" width="3.5" height="11" rx="1"/><rect x="6.25" y="2.5" width="3.5" height="7" rx="1"/><rect x="10.5" y="2.5" width="3.5" height="9" rx="1"/></svg>',
+    sliders: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 4.5h6M11.5 4.5h2M2.5 11.5h2M7.5 11.5h6"/><circle cx="10" cy="4.5" r="1.5"/><circle cx="6" cy="11.5" r="1.5"/></svg>',
+    filter: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 4h11M4.5 8h7M6.5 12h3"/></svg>',
+    x: '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="m3 3 6 6M9 3 3 9"/></svg>',
+    caret: '<svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M2 3.2h6L5 7.2z"/></svg>',
+    chevR: '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="m4.5 2.5 3.5 3.5-3.5 3.5"/></svg>',
+    up: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m4 10 4-4 4 4"/></svg>',
+    down: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6 4 4 4-4"/></svg>',
+    check: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3.5 8.5 3 3 6-7"/></svg>',
+    menu: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></svg>',
+    theme: '<svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 2.4a5.6 5.6 0 0 1 0 11.2z" fill="currentColor"/></svg>',
+    spark: '<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5 9.6 6.4 14.5 8 9.6 9.6 8 14.5 6.4 9.6 1.5 8l4.9-1.6z"/></svg>',
+    msg: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>',
+    pen: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M10.5 2.5 13.5 5.5 6 13H3v-3z"/></svg>',
+  };
+  function statusIcon(s, size) {
+    const z = size || 14;
+    const k = { "新建": "todo", "跟进中": "prog", "已解决": "done", "已关闭": "closed" }[s] || "todo";
+    if (k === "todo") return `<svg width="${z}" height="${z}" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.5" fill="none" stroke="var(--s-new)" stroke-width="1.5"/></svg>`;
+    if (k === "prog") return `<svg width="${z}" height="${z}" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.5" fill="none" stroke="var(--s-prog)" stroke-width="1.5"/><path d="M7 3.6a3.4 3.4 0 0 1 0 6.8z" fill="var(--s-prog)"/></svg>`;
+    if (k === "done") return `<svg width="${z}" height="${z}" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6.2" fill="var(--s-done)"/><path d="m4.4 7.2 1.8 1.8 3.4-3.7" fill="none" stroke="var(--panel)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    return `<svg width="${z}" height="${z}" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6.2" fill="var(--s-closed)"/><path d="m5 5 4 4M9 5 5 9" stroke="var(--panel)" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+  }
+  function priIcon(l) {
+    if (l === "P0") return '<svg width="14" height="14" viewBox="0 0 14 14"><rect x="1" y="1" width="12" height="12" rx="3" fill="var(--urgent)"/><path d="M7 3.8v3.9" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><circle cx="7" cy="10.1" r=".95" fill="#fff"/></svg>';
+    const on = { P1: 3, P2: 2, P3: 1 }[l] || 0;
+    return '<svg width="14" height="14" viewBox="0 0 14 14">' + [4, 7, 10].map((h, i) =>
+      `<rect x="${1.5 + i * 4}" y="${12 - h}" width="3" height="${h}" rx=".8" fill="${i < on ? "var(--text-2)" : "var(--faint)"}"/>`).join("") + "</svg>";
+  }
+  const hue = s => { let h = 0; for (const c of String(s)) h = (h * 31 + c.codePointAt(0)) % 360; return h; };
+  const avatar = (name, cls) => name
+    ? `<span class="av ${cls || ""}" style="--h:${hue(name)}" title="${esc(name)}">${esc(Array.from(name)[0].toUpperCase())}</span>`
+    : `<span class="muted" title="未分配">${I.user}</span>`;
+  const TYPE_COLOR = Object.fromEntries(D.types.map((t, i) => [t.name, `var(--t${i % 8})`]));
+  const dot = t => `<span class="dot" style="--c:${TYPE_COLOR[t] || "var(--t7)"}"></span>`;
+  $("#btn-theme").innerHTML = I.theme;
+  $("#btn-menu").innerHTML = I.menu;
+  $("#search-ico").innerHTML = I.search;
+  $("#display-ico").innerHTML = I.sliders;
+
+  // ============================================================ 数据
   const NONE = "未分配";
   const OPEN = new Set(["新建", "跟进中"]);
-  const LV_ORDER = Object.fromEntries(D.levels.map((l, i) => [l, i]));
-  const TYPE_COLOR = Object.fromEntries(D.types.map((t, i) => [t.name, `var(--t${i % 8})`]));
-  const PUSH = Object.fromEntries(D.types.map(t => [t.name, t.push_to]));
-  const STATUS_COLOR = { "新建": "var(--p1)", "跟进中": "var(--accent)", "已解决": "var(--ok)", "已关闭": "var(--p3)" };
-  const DIMS = [
-    { key: "status", label: "状态", values: () => D.statuses, color: v => STATUS_COLOR[v] },
-    { key: "type", label: "类型", values: () => D.types.map(t => t.name), color: v => TYPE_COLOR[v] },
-    { key: "level", label: "等级", values: () => D.levels, color: v => `var(--${v.toLowerCase()})` },
-    { key: "owner", label: "跟进人", values: () => ownerList(), color: () => "var(--muted)" },
-  ];
+  const LEVEL_NAME = { P0: "紧急", P1: "高", P2: "中", P3: "低" };
+  const LV = { P0: 0, P1: 1, P2: 2, P3: 3 };
+  const LKEY = "aes-board:" + D.board_id;
+  let edits = API ? (D.edits || {}) : store.get(LKEY, {});
+  let history = D.history || {};
+  let ALL = [];
+  let BY_ID = {};
+  const PUSH = () => Object.fromEntries(D.types.map(t => [t.name, t.push_to]));
 
-  let edits = store.get(KEY, {});
-  const ui = Object.assign({ dim: "status", q: "", level: "", group: "", owner: "", open: false, types: [] }, store.get("aes-board:ui", {}));
-  let current = null; // 详情面板中的 event_id
-
-  const ev = e => Object.assign({}, e, edits[e.event_id] || {});
-  const events = () => D.events.map(ev);
-  const ownerOf = e => e.owner || NONE;
+  function recompute() {
+    ALL = D.events.map(e => Object.assign({}, e, edits[e.event_id] || {}));
+    BY_ID = Object.fromEntries(ALL.map(e => [e.event_id, e]));
+  }
+  const orig = id => D.events.find(e => e.event_id === id);
+  const ident = e => "AS-" + e.event_id.replace(/^evt_/, "").slice(0, 4).toUpperCase();
+  const staleH = iso => (Date.now() - new Date(iso).getTime()) / 36e5;
+  const isStale = e => OPEN.has(e.status) && staleH(e.end_time) > 24;
   function ownerList() {
     const n = {};
-    events().forEach(e => { n[ownerOf(e)] = (n[ownerOf(e)] || 0) + 1; });
-    return Object.keys(n).filter(o => o !== NONE).sort((a, b) => n[b] - n[a] || a.localeCompare(b, "zh")).concat([NONE]);
+    ALL.forEach(e => { if (e.owner) n[e.owner] = (n[e.owner] || 0) + 1; });
+    return Object.keys(n).sort((a, b) => n[b] - n[a] || a.localeCompare(b, "zh"));
   }
-  const dim = () => DIMS.find(d => d.key === ui.dim) || DIMS[0];
-  const fieldOf = (e, key) => key === "owner" ? ownerOf(e) : e[key];
+  function groupList() {
+    const g = {};
+    ALL.forEach(e => { (g[e.group_number] = g[e.group_number] || { id: e.group_number, name: e.group_name, uid: e.customer_uid, n: 0 }).n++; });
+    return Object.values(g).sort((a, b) => b.n - a.n || a.name.localeCompare(b.name, "zh"));
+  }
+  const groupLabel = id => { const g = groupList().find(x => x.id === id); return g ? (g.uid ? `${g.uid}` : g.name) : id; };
 
-  function fmt(iso) {
-    const d = new Date(iso);
-    if (isNaN(d)) return iso || "";
-    const p = n => String(n).padStart(2, "0");
-    return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
-  }
+  const p2 = n => String(n).padStart(2, "0");
+  function fmtDate(iso) { const d = new Date(iso); return isNaN(d) ? "" : `${d.getMonth() + 1}月${d.getDate()}日`; }
+  function fmtFull(iso) { const d = new Date(iso); return isNaN(d) ? (iso || "") : `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`; }
   function ago(iso) {
     const ms = Date.now() - new Date(iso).getTime();
-    if (!(ms > 0)) return "";
-    const h = ms / 36e5;
-    if (h < 1) return Math.max(1, Math.round(ms / 6e4)) + " 分钟前";
-    if (h < 48) return Math.round(h) + " 小时前";
-    return Math.round(h / 24) + " 天前";
-  }
-  const staleHours = iso => (Date.now() - new Date(iso).getTime()) / 36e5;
-
-  function matches(e) {
-    if (ui.types.length && !ui.types.includes(e.type)) return false;
-    if (ui.level && e.level !== ui.level) return false;
-    if (ui.group && e.group_number !== ui.group) return false;
-    if (ui.owner && ownerOf(e) !== ui.owner) return false;
-    if (ui.open && !OPEN.has(e.status)) return false;
-    if (ui.q) {
-      const hay = [e.title, e.summary, e.group_name, e.customer_uid, e.owner, e.type,
-        ...Object.entries(e.attributes || {}).flat()].join(" ").toLowerCase();
-      if (!ui.q.toLowerCase().split(/\s+/).filter(Boolean).every(w => hay.includes(w))) return false;
-    }
-    return true;
+    if (!(ms > 0)) return fmtDate(iso);
+    const m = ms / 6e4;
+    if (m < 1) return "刚刚";
+    if (m < 60) return Math.round(m) + " 分钟前";
+    if (m < 60 * 24) return Math.round(m / 60) + " 小时前";
+    if (m < 60 * 24 * 30) return Math.round(m / 1440) + " 天前";
+    return fmtDate(iso);
   }
 
-  // ------------------------------------------------------------- 渲染
-  function renderKpis(list) {
-    const open = list.filter(e => OPEN.has(e.status));
-    const urgent = open.filter(e => e.level === "P0" || e.level === "P1");
-    const stale = open.filter(e => staleHours(e.end_time) > 24);
-    const fresh = list.filter(e => e.status === "新建");
-    const groups = new Set(list.map(e => e.group_number));
-    const avg = list.length ? list.reduce((s, e) => s + e.confidence, 0) / list.length : 0;
-    const k = [
-      ["事件总数", list.length, `${groups.size} 个群`],
-      ["未关闭", open.length, `新建 ${fresh.length} · 跟进中 ${open.length - fresh.length}`],
-      ["P0/P1 未关闭", urgent.length, urgent.length ? "需优先处理" : "暂无", urgent.length > 0],
-      ["超 24h 无动态", stale.length, "未关闭事件中", stale.length > 0],
-      ["平均置信度", list.length ? avg.toFixed(2) : "-", "模型自评"],
-    ];
-    $("#kpis").innerHTML = k.map(([l, v, s, a]) =>
-      `<div class="kpi${a ? " alert" : ""}"><div class="label">${esc(l)}</div><div class="value">${esc(v)}</div><div class="sub">${esc(s)}</div></div>`).join("");
-  }
+  // ============================================================ 视图 / 筛选 / 分组
+  const VIEWS = [
+    { key: "all", label: "全部事件", icon: I.stack, test: () => true },
+    { key: "open", label: "未关闭", icon: I.open, test: e => OPEN.has(e.status) },
+    { key: "urgent", label: "高优先级", icon: I.fire, test: e => OPEN.has(e.status) && LV[e.level] <= 1 },
+    { key: "stale", label: "超 24h 无动态", icon: I.clock, test: isStale },
+    { key: "unassigned", label: "未分配", icon: I.user, test: e => OPEN.has(e.status) && !e.owner },
+  ];
+  const FIELDS = {
+    status: { label: "状态", values: () => D.statuses, get: e => e.status, icon: v => statusIcon(v), text: v => v },
+    level: { label: "优先级", values: () => D.levels, get: e => e.level, icon: v => priIcon(v), text: v => LEVEL_NAME[v] || v, hint: v => v },
+    type: { label: "类型", values: () => D.types.map(t => t.name), get: e => e.type, icon: v => dot(v), text: v => v, hint: v => PUSH()[v] ? "→ " + PUSH()[v] : "" },
+    owner: { label: "跟进人", values: () => ownerList().concat([NONE]), get: e => e.owner || NONE, icon: v => avatar(v === NONE ? null : v), text: v => v },
+    group: { label: "客户群", values: () => groupList().map(g => g.id), get: e => e.group_number, icon: () => `<span class="muted">${I.users}</span>`, text: groupLabel },
+  };
+  const GROUPINGS = [["status", "状态"], ["type", "类型"], ["level", "优先级"], ["owner", "跟进人"], ["none", "不分组"]];
+  const SORTS = [["priority", "优先级"], ["updated", "最近消息"], ["created", "首次出现"], ["confidence", "置信度"]];
 
-  function renderChips(all) {
-    const n = {};
-    all.forEach(e => { n[e.type] = (n[e.type] || 0) + 1; });
-    $("#type-chips").innerHTML = D.types.map(t =>
-      `<button class="chip" style="--c:${TYPE_COLOR[t.name]}" data-type="${esc(t.name)}" aria-pressed="${ui.types.includes(t.name)}" title="${esc(t.push_to ? "推送：" + t.push_to : "")}">` +
-      `<span class="dot"></span>${esc(t.name)}<span class="n">${n[t.name] || 0}</span></button>`).join("");
-  }
+  const ui = Object.assign({ view: "all", layout: "list", group: "status", sort: "priority", q: "", f: {}, collapsed: [], showEmpty: false },
+    store.get("aes-board:ui2", {}));
+  if (!VIEWS.some(v => v.key === ui.view)) ui.view = "all";
+  let cursor = null, current = null, order = [];
+  const saveUi = () => store.set("aes-board:ui2", Object.assign({}, ui, { q: "" }));
 
-  function card(e) {
-    const stale = OPEN.has(e.status) && staleHours(e.end_time) > 24;
-    const attrs = Object.keys(e.attributes || {}).length;
-    const edited = !!edits[e.event_id];
-    return `<div class="card" draggable="true" tabindex="0" role="button" data-id="${esc(e.event_id)}" style="--lc:var(--${e.level.toLowerCase()})">
-      <div class="row1"><span class="lvl">${esc(e.level)}</span>
-        ${ui.dim !== "type" ? `<span class="tag" style="--c:${TYPE_COLOR[e.type]}">${esc(e.type)}</span>` : ""}
-        ${ui.dim !== "status" ? `<span class="st">${esc(e.status)}</span>` : ""}
-        ${edited ? `<span class="edited" title="在本浏览器中修改过">已修改</span>` : ""}</div>
-      <div class="title">${esc(e.title)}</div>
-      <div class="sum">${esc(e.summary)}</div>
-      <div class="foot">
-        <span title="${esc(e.group_name)}">${esc(e.customer_uid || e.group_name)}</span>
-        ${ui.dim !== "owner" ? `<span>👤 ${esc(e.owner || NONE)}</span>` : ""}
-        <span class="${stale ? "stale" : ""}" title="${esc(fmt(e.start_time) + " ~ " + fmt(e.end_time))}">${esc(ago(e.end_time) || fmt(e.end_time))}</span>
-        <span class="conf" title="置信度 ${e.confidence.toFixed(2)}"><i><b style="width:${Math.round(e.confidence * 100)}%"></b></i>${e.confidence.toFixed(2)}</span>
-        ${attrs ? `<span>${attrs} 个属性</span>` : ""}
-      </div></div>`;
-  }
-
-  function render() {
-    const all = events();
-    const list = all.filter(matches);
-    renderKpis(list);
-    renderChips(all);
-    const d = dim();
-    const sorted = list.slice().sort((a, b) => LV_ORDER[a.level] - LV_ORDER[b.level] || (b.end_time > a.end_time ? 1 : -1));
-    $("#board").innerHTML = d.values().map(v => {
-      const items = sorted.filter(e => fieldOf(e, d.key) === v);
-      return `<section class="col" data-value="${esc(v)}" style="--c:${d.color(v)}">
-        <header><span class="bar"></span>${esc(v)}<span class="count">${items.length}</span>
-          ${d.key === "type" && PUSH[v] ? `<span class="hint">→ ${esc(PUSH[v])}</span>` : ""}</header>
-        <div class="list">${items.length ? items.map(card).join("") : `<div class="empty">拖到这里</div>`}</div></section>`;
-    }).join("");
-    $("#btn-reset").disabled = !Object.keys(edits).length;
-    $("#btn-reset").textContent = Object.keys(edits).length ? `撤销修改（${Object.keys(edits).length}）` : "撤销修改";
-    if (current) renderDrawer();
-    store.set("aes-board:ui", ui);
-  }
-
-  function renderToolbar() {
-    $("#title").textContent = D.title;
-    document.title = D.title;
-    const times = D.events.map(e => e.end_time).sort();
-    $("#meta").textContent = (times.length ? `数据截至 ${fmt(times[times.length - 1])} · ` : "") + `生成于 ${fmt(D.generated_at)}`;
-    $("#dims").innerHTML = DIMS.map(d => `<button data-dim="${d.key}" aria-pressed="${d.key === ui.dim}">${d.label}</button>`).join("");
-    $("#f-level").innerHTML = `<option value="">全部等级</option>` + D.levels.map(l => `<option>${l}</option>`).join("");
-    const groups = {};
-    D.events.forEach(e => { groups[e.group_number] = e.group_name; });
-    $("#f-group").innerHTML = `<option value="">全部群</option>` +
-      Object.entries(groups).sort((a, b) => a[1].localeCompare(b[1], "zh")).map(([k, v]) => `<option value="${esc(k)}">${esc(v)}</option>`).join("");
-    $("#f-owner").innerHTML = `<option value="">全部跟进人</option>` + ownerList().map(o => `<option>${esc(o)}</option>`).join("");
-    // 恢复上次的筛选；已不存在的选项回退为“全部”
-    ["level", "group", "owner"].forEach(k => {
-      const sel = $("#f-" + k);
-      sel.value = ui[k];
-      if (sel.value !== ui[k]) ui[k] = "";
+  function filtered() {
+    const view = VIEWS.find(v => v.key === ui.view);
+    const words = ui.q.toLowerCase().split(/\s+/).filter(Boolean);
+    return ALL.filter(e => {
+      if (!view.test(e)) return false;
+      for (const [k, vals] of Object.entries(ui.f)) if (vals && vals.length && !vals.includes(FIELDS[k].get(e))) return false;
+      if (words.length) {
+        const hay = [ident(e), e.title, e.summary, e.group_name, e.customer_uid, e.owner, e.type, ...Object.entries(e.attributes || {}).flat()].join(" ").toLowerCase();
+        if (!words.every(w => hay.includes(w))) return false;
+      }
+      return true;
     });
-    $("#q").value = ui.q;
-    $("#f-open").checked = ui.open;
-    ui.types = ui.types.filter(t => t in TYPE_COLOR);
+  }
+  function sorted(list) {
+    const by = {
+      priority: (a, b) => LV[a.level] - LV[b.level] || (b.end_time > a.end_time ? 1 : -1),
+      updated: (a, b) => (b.end_time > a.end_time ? 1 : -1),
+      created: (a, b) => (b.start_time > a.start_time ? 1 : -1),
+      confidence: (a, b) => b.confidence - a.confidence,
+    }[ui.sort] || (() => 0);
+    return list.slice().sort(by);
+  }
+  function grouped(list, dimKey) {
+    const k = dimKey || ui.group;
+    if (k === "none") return [{ key: "__all", label: "全部事件", icon: I.stack, items: list }];
+    const F = FIELDS[k];
+    const vals = F.values();
+    const extra = [...new Set(list.map(F.get))].filter(v => !vals.includes(v));
+    return vals.concat(extra).map(v => ({ key: v, label: F.text(v), icon: F.icon(v), hint: F.hint ? F.hint(v) : "", items: list.filter(e => F.get(e) === v) }));
   }
 
-  // ------------------------------------------------------------- 详情面板
-  function renderDrawer() {
-    const raw = D.events.find(e => e.event_id === current);
-    if (!raw) return closeDrawer();
-    const e = ev(raw);
-    const opts = (vals, cur) => vals.map(v => `<option${v === cur ? " selected" : ""}>${esc(v)}</option>`).join("");
+  // ============================================================ 渲染
+  function render() {
+    recompute();
+    renderSidebar();
+    renderTop();
+    renderFilterbar();
+    renderContent();
+    if (current) renderPeek();
+    saveUi();
+  }
+
+  function navItem(attrs, icon, label, n, active) {
+    return `<button class="nav-item" ${attrs} aria-current="${!!active}"><span class="ico">${icon}</span><span class="lab">${esc(label)}</span><span class="n">${n}</span></button>`;
+  }
+  function renderSidebar() {
+    $("#ws-name").textContent = D.title;
+    const onlyFilter = k => Object.keys(ui.f).filter(x => ui.f[x] && ui.f[x].length).join() === k && ui.f[k].length === 1 ? ui.f[k][0] : null;
+    const onlyType = onlyFilter("type"), onlyGroup = onlyFilter("group");
+    const noFilter = !Object.values(ui.f).some(v => v && v.length);
+    $("#nav-views").innerHTML = VIEWS.map(v => navItem(`data-view="${v.key}"`, v.icon, v.label, ALL.filter(v.test).length, ui.view === v.key && noFilter)).join("");
+    $("#nav-types").innerHTML = D.types.map(t => navItem(`data-type="${esc(t.name)}" title="${esc(t.push_to ? "推送：" + t.push_to : "")}"`, dot(t.name), t.name,
+      ALL.filter(e => e.type === t.name && OPEN.has(e.status)).length || "", onlyType === t.name)).join("");
+    const gl = groupList();
+    $("#nav-groups").innerHTML = gl.slice(0, 12).map(g => navItem(`data-group="${esc(g.id)}" title="${esc(g.name)}"`, `<span class="av" style="--h:${hue(g.id)};width:16px;height:16px;font-size:9px;border-radius:4px">${esc(Array.from(g.uid || g.name)[0])}</span>`,
+      g.uid ? `${g.uid} · ${g.name.replace(/[-<].*$/, "")}` : g.name, g.n, onlyGroup === g.id)).join("") || `<div class="nav-item muted" style="cursor:default">暂无</div>`;
+    const times = D.events.map(e => e.end_time).sort();
+    $("#sync").innerHTML = API
+      ? `<span class="dotlive" id="live"></span><span>已同步 · ${esc(fmtFull(D.generated_at).slice(5))}</span>`
+      : `<span class="dotlive off"></span><span title="修改只保存在当前浏览器">本地模式${times.length ? " · 数据截至 " + esc(fmtFull(times[times.length - 1]).slice(5)) : ""}</span>`;
+  }
+
+  function renderTop() {
+    const view = VIEWS.find(v => v.key === ui.view);
+    $("#view-icon").innerHTML = `<span class="muted">${view.icon}</span>`;
+    $("#view-name").textContent = view.label;
+    $("#view-count").textContent = filtered().length;
+    $("#layout-seg").innerHTML = [["list", "列表", I.list], ["board", "看板", I.board]].map(([k, l, ic]) =>
+      `<button data-layout="${k}" aria-pressed="${ui.layout === k}" title="${l}（Ctrl+B 切换）" aria-label="${l}">${ic}</button>`).join("");
+  }
+
+  function renderFilterbar() {
+    const chips = Object.entries(ui.f).filter(([, v]) => v && v.length).map(([k, vals]) => {
+      const F = FIELDS[k];
+      const v = vals.length === 1 ? `${F.icon(vals[0])}<span>${esc(F.text(vals[0]))}</span>` : `<span>${vals.length} 项</span>`;
+      return `<span class="fchip"><span class="k">${esc(F.label)}</span><span class="op">${vals.length > 1 ? "属于" : "是"}</span><button class="v" data-edit-filter="${k}">${v}</button><button data-clear-filter="${k}" aria-label="移除筛选">${I.x}</button></span>`;
+    }).join("");
+    const list = filtered();
+    const open = list.filter(e => OPEN.has(e.status));
+    const urgent = open.filter(e => LV[e.level] <= 1).length;
+    const stale = open.filter(isStale).length;
+    $("#filterbar").innerHTML = chips + `<button class="fadd" id="btn-filter">${I.filter}<span>筛选</span></button>` +
+      (chips ? `<button class="fadd" id="btn-clear">清除</button>` : "") +
+      `<span class="stats"><span>未关闭 <b>${open.length}</b></span><span class="${urgent ? "hot" : ""}">紧急/高 <b>${urgent}</b></span><span class="${stale ? "hot" : ""}">超 24h 无动态 <b>${stale}</b></span><span>客户 <b>${new Set(list.map(e => e.group_number)).size}</b></span></span>`;
+  }
+
+  function row(e) {
+    const st = isStale(e);
+    return `<div class="row${cursor === e.event_id ? " cur" : ""}" data-id="${esc(e.event_id)}" tabindex="-1">
+      <button class="ib" data-act="level" title="优先级：${esc(LEVEL_NAME[e.level])}（P）">${priIcon(e.level)}</button>
+      <span class="ident">${ident(e)}</span>
+      <button class="ib" data-act="status" title="状态：${esc(e.status)}（S）">${statusIcon(e.status)}</button>
+      <span class="rtitle">${esc(e.title)}${edits[e.event_id] ? '<span class="mod" title="已人工修改"></span>' : ""}</span>
+      <span class="rmeta">
+        ${ui.group !== "type" ? `<span class="lbl typ">${dot(e.type)}<span class="t">${esc(e.type)}</span></span>` : ""}
+        <span class="lbl plain cust" title="${esc(e.group_name)}"><span class="t">${esc(e.customer_uid || e.group_name)}</span></span>
+        <span class="date${st ? " stale" : ""}" title="${st ? "超过 24 小时无新消息 · " : ""}最近消息 ${esc(fmtFull(e.end_time))}">${esc(st ? ago(e.end_time) : fmtDate(e.end_time))}</span>
+        <button class="ib" data-act="owner" title="跟进人：${esc(e.owner || NONE)}（A）">${avatar(e.owner)}</button>
+      </span></div>`;
+  }
+  function card(e) {
+    return `<div class="kcard${cursor === e.event_id ? " cur" : ""}" draggable="true" data-id="${esc(e.event_id)}" tabindex="-1">
+      <div class="k1"><span class="ident">${ident(e)}</span>${edits[e.event_id] ? '<span class="mod" title="已人工修改"></span>' : ""}<span class="spacer"></span>
+        <button class="ib" data-act="owner" title="跟进人：${esc(e.owner || NONE)}">${avatar(e.owner)}</button></div>
+      <div class="k2">${ui.group !== "status" ? `<button class="ib" data-act="status" style="width:16px;height:16px" title="状态：${esc(e.status)}">${statusIcon(e.status)}</button>` : ""}<span>${esc(e.title)}</span></div>
+      <div class="k3"><button class="ib" data-act="level" title="优先级：${esc(LEVEL_NAME[e.level])}">${priIcon(e.level)}</button>
+        ${ui.group !== "type" ? `<span class="lbl">${dot(e.type)}<span class="t">${esc(e.type)}</span></span>` : ""}
+        <span class="lbl plain" title="${esc(e.group_name)}"><span class="t">${esc(e.customer_uid || e.group_name)}</span></span>
+        <span class="date${isStale(e) ? " stale" : ""}" style="margin-left:auto;width:auto">${esc(isStale(e) ? ago(e.end_time) : fmtDate(e.end_time))}</span></div>
+    </div>`;
+  }
+
+  function renderContent() {
+    const box = $("#content");
+    const list = sorted(filtered());
+    order = [];
+    if (!D.events.length) {
+      box.innerHTML = `<div class="empty"><div class="muted">${I.stack}</div><h3>还没有事件</h3><p>运行 <code>aes run</code> 抽取事件后，结果会自动出现在这里。</p></div>`;
+      return;
+    }
+    if (!list.length) {
+      box.innerHTML = `<div class="empty"><div class="muted">${I.search}</div><h3>没有符合条件的事件</h3><p>换个视图，或清除筛选和搜索条件。</p><button class="btn" id="btn-reset-filters">清除筛选</button></div>`;
+      return;
+    }
+    if (ui.layout === "board") {
+      const dimKey = ui.group === "none" ? "status" : ui.group;
+      const cols = grouped(list, dimKey).filter(g => ui.showEmpty || g.items.length || dimKey === "status");
+      cols.forEach(g => g.items.forEach(e => order.push(e.event_id)));
+      box.innerHTML = `<div class="kanban">${cols.map(g => `<section class="kcol" data-value="${esc(g.key)}">
+        <header class="khead">${g.icon}<span>${esc(g.label)}</span><span class="gcount">${g.items.length}</span>${g.hint ? `<span class="spacer"></span><span class="muted" style="font-size:12px;font-weight:400">${esc(g.hint)}</span>` : ""}</header>
+        <div class="klist">${g.items.length ? g.items.map(card).join("") : `<div class="kempty">拖到这里</div>`}</div></section>`).join("")}</div>`;
+      return;
+    }
+    const groups = grouped(list).filter(g => g.items.length || ui.showEmpty);
+    box.innerHTML = groups.map(g => {
+      const closed = ui.collapsed.includes(ui.group + ":" + g.key);
+      if (!closed) g.items.forEach(e => order.push(e.event_id));
+      return `<div class="ghead${closed ? " closed" : ""}" data-g="${esc(g.key)}" role="button" aria-expanded="${!closed}"><span class="caret">${I.caret}</span>${g.icon}<span>${esc(g.label)}</span><span class="gcount">${g.items.length}</span>${g.hint ? `<span class="spacer"></span><span class="muted" style="font-size:12px;font-weight:400">${esc(g.hint)}</span>` : ""}</div>` +
+        (closed ? "" : g.items.map(row).join(""));
+    }).join("");
+  }
+
+  // ============================================================ 详情
+  function fieldText(f, v) {
+    if (f === "level") return `${LEVEL_NAME[v] || v}`;
+    if (f === "owner") return v || NONE;
+    return v;
+  }
+  const FIELD_LABEL = { status: "状态", level: "优先级", type: "类型", owner: "跟进人" };
+  function renderPeek() {
+    const e = BY_ID[current];
+    if (!e) return closePeek();
+    const idx = order.indexOf(current);
     const attrs = Object.entries(e.attributes || {});
     const msgs = e.evidence_msg_ids.map(id => [id, D.messages[id]]);
+    const hist = (history[current] || []).slice().reverse();
     const hasMsgs = msgs.some(([, m]) => m);
-    $("#drawer").innerHTML = `
-      <div class="dh"><button class="close" id="d-close" aria-label="关闭">×</button>
-        <div class="row1"><span class="lvl" style="--lc:var(--${e.level.toLowerCase()})">${esc(e.level)}</span>
-          <span class="tag" style="--c:${TYPE_COLOR[e.type]}">${esc(e.type)}</span><span class="st">${esc(e.status)}</span>
-          ${edits[e.event_id] ? `<span class="edited">已修改</span>` : ""}</div>
-        <h2>${esc(e.title)}</h2></div>
-      <div class="db">
-        <section><p style="margin:0">${esc(e.summary)}</p></section>
-        <section><h3>处理</h3><div class="edit">
-          <label>状态<select data-f="status">${opts(D.statuses, e.status)}</select></label>
-          <label>等级<select data-f="level">${opts(D.levels, e.level)}</select></label>
-          <label>类型<select data-f="type">${opts(D.types.map(t => t.name), e.type)}</select></label>
-          <label>跟进人<input data-f="owner" value="${esc(e.owner || "")}" placeholder="${NONE}"></label>
-        </div>${edits[e.event_id] ? `<p style="margin:8px 0 0"><button class="btn" id="d-revert">恢复为原始值</button></p>` : ""}</section>
-        <section><h3>基本信息</h3><dl class="kv">
-          <dt>群</dt><dd>${esc(e.group_name)}</dd>
-          <dt>客户 UID</dt><dd>${esc(e.customer_uid || "-")}</dd>
-          <dt>推送</dt><dd>${esc(PUSH[e.type] || "-")}</dd>
-          <dt>时间</dt><dd>${esc(fmt(e.start_time))} ~ ${esc(fmt(e.end_time))}</dd>
-          <dt>置信度</dt><dd>${e.confidence.toFixed(2)}</dd>
-          <dt>事件 ID</dt><dd class="ids">${esc(e.event_id)}</dd>
-        </dl></section>
-        ${attrs.length ? `<section><h3>属性</h3><dl class="kv">${attrs.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl></section>` : ""}
-        <section><h3>证据消息（${msgs.length}）</h3>
-          ${hasMsgs ? msgs.map(([id, m]) => m
-            ? `<div class="msg${m.role === "内部" ? " in" : ""}"><div class="mh">${esc(fmt(m.t))} · ${esc(m.role)} · ${esc(m.sender)} <span class="ids">#${esc(id)}</span></div><div class="mc">${esc(m.content)}</div></div>`
-            : `<div class="msg"><div class="mh ids">#${esc(id)}（原文未提供）</div></div>`).join("")
-          : `<div class="ids">${msgs.map(([id]) => "#" + esc(id)).join("  ")}</div>
-             <p style="color:var(--muted);font-size:12px">生成看板时加上 <code>--input 原始数据.json</code> 即可在这里看到消息原文。</p>`}
-        </section>
-        <section><h3>来源窗口</h3><div class="ids">${(e.source_windows || []).map(esc).join("<br>") || "-"}</div></section>
+    const conf = Math.round(e.confidence * 100);
+    $("#peek").innerHTML = `
+      <header class="ph">
+        <div class="path">${dot(e.type)}<span>${esc(e.type)}</span>${I.chevR}<b>${ident(e)}</b></div>
+        <span class="spacer"></span>
+        <span class="muted" style="font-size:12px">${idx >= 0 ? `${idx + 1} / ${order.length}` : ""}</span>
+        <button class="icon-btn" data-nav="-1" title="上一个（K）" aria-label="上一个" ${idx <= 0 ? "disabled" : ""}>${I.up}</button>
+        <button class="icon-btn" data-nav="1" title="下一个（J）" aria-label="下一个" ${idx < 0 || idx >= order.length - 1 ? "disabled" : ""}>${I.down}</button>
+        <button class="icon-btn" id="peek-close" title="关闭（Esc）" aria-label="关闭">${I.x}</button>
+      </header>
+      <div class="pbody">
+        <div class="pmain">
+          <h1>${esc(e.title)}</h1>
+          <p class="psum">${esc(e.summary)}</p>
+          ${attrs.length ? `<div class="psec"><h4>属性<span class="n">${attrs.length}</span></h4><dl class="attrs">${attrs.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl></div>` : ""}
+          <div class="psec"><h4>证据消息<span class="n">${msgs.length}</span></h4>
+            ${hasMsgs ? `<div class="tl">${msgs.map(([id, m]) => m ? `
+              <div class="tl-item">${avatar(m.sender)}<div class="tl-body">
+                <div class="tl-head"><b>${esc(m.sender)}</b><span>${esc(m.role)}</span><span>·</span><span title="${esc(fmtFull(m.t))}">${esc(fmtFull(m.t).slice(5))}</span><span class="code">#${esc(id)}</span></div>
+                <div class="bubble${m.role === "内部" ? " inner" : ""}">${esc(m.content)}</div></div></div>`
+              : `<div class="tl-item"><span class="tl-ico">${I.msg}</span><div class="tl-body"><div class="tl-head">消息 <span class="code">#${esc(id)}</span> 原文未提供</div></div></div>`).join("")}</div>`
+            : `<p class="muted" style="margin:0">${msgs.map(([id]) => `<span class="code">#${esc(id)}</span>`).join(" ")}<br>${API ? "服务端未找到对应的原始数据。" : "生成看板时加上 <code>--input 原始数据.json</code> 即可显示消息原文。"}</p>`}
+          </div>
+          <div class="psec"><h4>动态</h4><div class="tl">
+            ${hist.map(h => `<div class="tl-item"><span class="tl-ico">${I.pen}</span><div class="tl-body"><div class="tl-head"><b>${esc(h.by || "本地")}</b>
+              ${h.field === "*" ? "<span>恢复为模型原始值</span>" : `<span>将${esc(FIELD_LABEL[h.field] || h.field)}从</span><b>${esc(fieldText(h.field, h.from))}</b><span>改为</span><b>${esc(fieldText(h.field, h.to))}</b>`}
+              <span>·</span><span title="${esc(fmtFull(h.at))}">${esc(ago(h.at))}</span></div></div></div>`).join("")}
+            <div class="tl-item"><span class="tl-ico" style="color:var(--accent)">${I.spark}</span><div class="tl-body"><div class="tl-head"><b>模型</b><span>从 ${(e.source_windows || []).length || 1} 个对话窗口中识别出该事件 · 置信度 ${e.confidence.toFixed(2)}</span><span>·</span><span>${esc(fmtFull(e.start_time).slice(5))}</span></div></div></div>
+          </div></div>
+        </div>
+        <aside class="pside">
+          <div class="prop"><span>状态</span><button class="pbtn" data-act="status">${statusIcon(e.status)}<span class="t">${esc(e.status)}</span></button></div>
+          <div class="prop"><span>优先级</span><button class="pbtn" data-act="level">${priIcon(e.level)}<span class="t">${esc(LEVEL_NAME[e.level])}</span><span class="muted">${esc(e.level)}</span></button></div>
+          <div class="prop"><span>类型</span><button class="pbtn" data-act="type">${dot(e.type)}<span class="t">${esc(e.type)}</span></button></div>
+          <div class="prop"><span>跟进人</span><button class="pbtn" data-act="owner">${avatar(e.owner)}<span class="t${e.owner ? "" : " muted"}">${esc(e.owner || NONE)}</span></button></div>
+          ${edits[current] ? `<div class="prop"><span></span><button class="btn ghost" id="peek-revert" style="justify-content:flex-start;color:var(--muted)">恢复为模型原始值</button></div>` : ""}
+          <div class="pdiv"></div>
+          <div class="prop"><span>推送</span><span class="pval">${esc(PUSH()[e.type] || "-")}</span></div>
+          <div class="prop"><span>客户 UID</span><span class="pval">${esc(e.customer_uid || "-")}</span></div>
+          <div class="prop"><span>群</span><span class="pval">${esc(e.group_name)}</span></div>
+          <div class="prop"><span>首次消息</span><span class="pval">${esc(fmtFull(e.start_time))}</span></div>
+          <div class="prop"><span>最近消息</span><span class="pval${isStale(e) ? "" : ""}" style="${isStale(e) ? "color:var(--warn)" : ""}">${esc(fmtFull(e.end_time))}${isStale(e) ? `<br><span style="font-size:12px">${esc(ago(e.end_time))}，超过 24 小时</span>` : ""}</span></div>
+          <div class="prop"><span>置信度</span><span class="pval conf"><i><b style="width:${conf}%"></b></i>${e.confidence.toFixed(2)}</span></div>
+          <div class="pdiv"></div>
+          <div class="prop" style="align-items:start"><span>事件 ID</span><span class="pval code">${esc(e.event_id)}</span></div>
+          <div class="prop" style="align-items:start"><span>来源窗口</span><span class="pval code">${(e.source_windows || []).map(esc).join("<br>") || "-"}</span></div>
+        </aside>
       </div>`;
   }
-  function openDrawer(id) {
+  function openPeek(id) {
     current = id;
-    renderDrawer();
-    $("#drawer").classList.add("on");
-    $("#drawer").setAttribute("aria-hidden", "false");
+    cursor = id;
+    renderPeek();
+    $("#peek").classList.add("on");
+    $("#peek").setAttribute("aria-hidden", "false");
     $("#scrim").classList.add("on");
-    $("#d-close").focus();
+    markCursor();
   }
-  function closeDrawer() {
-    const id = current;
+  function closePeek() {
     current = null;
-    $("#drawer").classList.remove("on");
-    $("#drawer").setAttribute("aria-hidden", "true");
+    $("#peek").classList.remove("on");
+    $("#peek").setAttribute("aria-hidden", "true");
     $("#scrim").classList.remove("on");
-    const c = id && document.querySelector(`.card[data-id="${CSS.escape(id)}"]`);
-    if (c) c.focus();
+    markCursor(true);
+  }
+  function markCursor(focus) {
+    $$(".row.cur, .kcard.cur").forEach(x => x.classList.remove("cur"));
+    if (!cursor) return;
+    const el = document.querySelector(`[data-id="${CSS.escape(cursor)}"]`);
+    if (!el) return;
+    el.classList.add("cur");
+    el.scrollIntoView({ block: "nearest" });
+    if (focus) el.focus({ preventScroll: true });
   }
 
-  // ------------------------------------------------------------- 修改
-  function setField(id, key, value) {
-    const orig = D.events.find(e => e.event_id === id);
-    if (!orig) return;
-    if (key === "owner") value = value && value !== NONE ? value.trim() || null : null;
+  // ============================================================ 弹出菜单
+  const pop = { el: $("#pop"), open: false, items: [], sel: 0, opts: null, anchor: null };
+  function place(anchor) {
+    const r = anchor.getBoundingClientRect();
+    const el = pop.el;
+    el.style.left = "0px"; el.style.top = "0px";
+    const w = el.offsetWidth, h = el.offsetHeight;
+    let x = Math.min(r.left, innerWidth - w - 8), y = r.bottom + 4;
+    if (y + h > innerHeight - 8) y = Math.max(8, r.top - h - 4);
+    el.style.left = Math.max(8, x) + "px";
+    el.style.top = y + "px";
+  }
+  function openMenu(anchor, opts) {
+    pop.opts = opts; pop.anchor = anchor; pop.sel = 0; pop.open = true;
+    pop.el.innerHTML = `<div class="pin">${I.search}<input placeholder="${esc(opts.title)}" aria-label="${esc(opts.title)}">${opts.key ? `<span class="kbd">${opts.key}</span>` : ""}</div><div class="plist" role="listbox"></div>`;
+    pop.el.classList.add("on");
+    const input = $("input", pop.el);
+    input.addEventListener("input", () => { pop.sel = 0; drawMenu(); });
+    input.addEventListener("keydown", menuKey);
+    drawMenu();
+    place(anchor);
+    input.focus();
+  }
+  function drawMenu() {
+    const q = $("input", pop.el).value.trim();
+    const ql = q.toLowerCase();
+    let items = pop.opts.items().filter(it => !ql || (it.label + " " + (it.hint || "")).toLowerCase().includes(ql));
+    if (pop.opts.create && q && !items.some(it => it.label === q)) items = items.concat([{ value: q, label: `分配给「${q}」`, icon: avatar(q) }]);
+    pop.items = items;
+    pop.sel = Math.min(pop.sel, Math.max(0, items.length - 1));
+    $(".plist", pop.el).innerHTML = items.length ? items.map((it, i) =>
+      `<button class="opt${i === pop.sel ? " sel" : ""}" data-i="${i}" role="option" aria-selected="${i === pop.sel}">${it.icon || ""}<span class="t">${esc(it.label)}</span>${it.hint ? `<span class="h">${esc(it.hint)}</span>` : ""}${it.checked ? `<span class="chk">${I.check}</span>` : ""}${it.n != null ? `<span class="h">${it.n}</span>` : ""}</button>`).join("")
+      : `<div class="none">没有匹配项</div>`;
+  }
+  function pick(i) {
+    const it = pop.items[i];
+    if (!it) return;
+    const o = pop.opts;
+    o.onPick(it.value);
+    if (o.chain) return; // 选中后打开了下一级菜单
+    // 多选时保持菜单打开；锚点被重新渲染掉时，菜单留在原位
+    if (o.multi && pop.open) { drawMenu(); if (document.contains(pop.anchor)) place(pop.anchor); } else closeMenu();
+  }
+  function menuKey(ev) {
+    if (ev.key === "ArrowDown" || (ev.ctrlKey && ev.key === "n")) { ev.preventDefault(); pop.sel = Math.min(pop.items.length - 1, pop.sel + 1); drawMenu(); scrollSel(); }
+    else if (ev.key === "ArrowUp" || (ev.ctrlKey && ev.key === "p")) { ev.preventDefault(); pop.sel = Math.max(0, pop.sel - 1); drawMenu(); scrollSel(); }
+    else if (ev.key === "Enter") { ev.preventDefault(); pick(pop.sel); }
+    else if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); closeMenu(); }
+  }
+  const scrollSel = () => { const s = $(".opt.sel", pop.el); if (s) s.scrollIntoView({ block: "nearest" }); };
+  function openPanel(anchor, html, bind) {
+    pop.opts = null; pop.anchor = anchor; pop.open = true;
+    pop.el.innerHTML = `<div class="panel">${html}</div>`;
+    pop.el.classList.add("on");
+    bind(pop.el);
+    place(anchor);
+  }
+  function closeMenu() {
+    if (!pop.open) return;
+    pop.open = false;
+    pop.el.classList.remove("on");
+    pop.el.innerHTML = "";
+    const a = pop.anchor;
+    pop.anchor = null;
+    if (a && document.contains(a) && current) a.focus({ preventScroll: true });
+  }
+  pop.el.addEventListener("click", ev => { const b = ev.target.closest(".opt"); if (b) pick(+b.dataset.i); });
+  pop.el.addEventListener("mousemove", ev => {
+    const b = ev.target.closest(".opt");
+    if (b && +b.dataset.i !== pop.sel) { pop.sel = +b.dataset.i; $$(".opt", pop.el).forEach((x, i) => x.classList.toggle("sel", i === pop.sel)); }
+  });
+  document.addEventListener("mousedown", ev => { if (pop.open && !pop.el.contains(ev.target) && !(pop.anchor && pop.anchor.contains(ev.target))) closeMenu(); });
+
+  function fieldMenu(anchor, id, field) {
+    const e = BY_ID[id];
+    const F = FIELDS[field];
+    const keys = { status: "S", level: "P", owner: "A", type: "T" };
+    openMenu(anchor, {
+      title: `修改${F.label}…`, key: keys[field], create: field === "owner",
+      items: () => F.values().map(v => ({ value: v, label: F.text(v), icon: F.icon(v), hint: F.hint ? F.hint(v) : "", checked: F.get(e) === v })),
+      onPick: v => setField(id, field, field === "owner" && v === NONE ? null : v),
+    });
+  }
+  function filterMenu(anchor, presetKey) {
+    const sub = k => {
+      const F = FIELDS[k];
+      openMenu(anchor, {
+        title: `筛选${F.label}…`, multi: true,
+        items: () => F.values().map(v => ({ value: v, label: F.text(v), icon: F.icon(v), checked: (ui.f[k] || []).includes(v), n: ALL.filter(e => F.get(e) === v).length })),
+        onPick: v => { const cur = ui.f[k] || []; ui.f[k] = cur.includes(v) ? cur.filter(x => x !== v) : cur.concat([v]); render(); },
+      });
+    };
+    if (presetKey) return sub(presetKey);
+    openMenu(anchor, {
+      title: "按…筛选", chain: true,
+      items: () => Object.entries(FIELDS).map(([k, F]) => ({ value: k, label: F.label, icon: `<span class="muted">${{ status: statusIcon("跟进中"), level: priIcon("P1"), type: '<span class="dot" style="--c:var(--muted)"></span>', owner: I.user, group: I.users }[k]}</span>` })),
+      onPick: sub,
+    });
+  }
+  function displayPanel(anchor) {
+    const opt = (pairs, cur) => pairs.map(([k, l]) => `<option value="${k}"${k === cur ? " selected" : ""}>${l}</option>`).join("");
+    const n = Object.keys(edits).length;
+    openPanel(anchor, `
+      <div class="layout">${[["list", "列表", I.list], ["board", "看板", I.board]].map(([k, l, ic]) => `<button data-layout="${k}" aria-pressed="${ui.layout === k}">${ic}<span>${l}</span></button>`).join("")}</div>
+      <div class="r"><span>分组</span><select data-ui="group">${opt(GROUPINGS, ui.group)}</select></div>
+      <div class="r"><span>排序</span><select data-ui="sort">${opt(SORTS, ui.sort)}</select></div>
+      <label class="r"><span>显示空分组</span><input type="checkbox" data-ui="showEmpty"${ui.showEmpty ? " checked" : ""}></label>
+      <div class="sep"></div>
+      <div class="acts"><button class="btn" data-do="export">导出 JSONL</button>${!API && n ? `<button class="btn" data-do="reset">撤销本地修改（${n}）</button>` : ""}</div>
+      <div class="muted" style="font-size:12px">${API ? "修改会同步给所有人，并记录在事件动态里。" : "本地模式：修改只保存在当前浏览器，可导出后交给下游。"}</div>`, el => {
+      el.addEventListener("change", ev => {
+        const k = ev.target.dataset.ui;
+        if (!k) return;
+        ui[k] = ev.target.type === "checkbox" ? ev.target.checked : ev.target.value;
+        render();
+      });
+      el.addEventListener("click", ev => {
+        const l = ev.target.closest("[data-layout]");
+        if (l) { ui.layout = l.dataset.layout; $$("[data-layout]", el).forEach(b => b.setAttribute("aria-pressed", b === l)); render(); }
+        const d = ev.target.closest("[data-do]");
+        if (d && d.dataset.do === "export") exportJsonl();
+        if (d && d.dataset.do === "reset" && confirm(`撤销本浏览器中对 ${n} 个事件的修改？`)) { edits = {}; history = {}; store.del(LKEY); store.del(LKEY + ":h"); closeMenu(); render(); }
+      });
+    });
+  }
+
+  // ============================================================ 修改
+  async function setField(id, key, value) {
+    const o = orig(id);
+    const before = BY_ID[id] ? BY_ID[id][key] : undefined;
+    if (!o || before === value) return;
+    const prevEdits = JSON.parse(JSON.stringify(edits)), prevHist = JSON.parse(JSON.stringify(history));
+    // 先在本地生效（乐观更新），服务端返回后以服务端为准
     const patch = Object.assign({}, edits[id] || {});
-    if (value === orig[key]) delete patch[key]; else patch[key] = value;
+    if (value === o[key]) delete patch[key]; else patch[key] = value;
     if (Object.keys(patch).length) edits[id] = patch; else delete edits[id];
-    store.set(KEY, edits);
-    if (key === "owner") renderToolbar();
+    history[id] = (history[id] || []).concat([{ at: new Date().toISOString(), by: API ? (D.user || "我") : "本地", field: key, from: before, to: value }]);
     render();
-  }
-  function toast(msg) {
-    const t = $("#toast");
-    t.textContent = msg;
-    t.classList.add("on");
-    clearTimeout(toast.h);
-    toast.h = setTimeout(() => t.classList.remove("on"), 1800);
-  }
-
-  // ------------------------------------------------------------- 事件绑定
-  $("#dims").addEventListener("click", e => {
-    const b = e.target.closest("button[data-dim]");
-    if (!b) return;
-    ui.dim = b.dataset.dim;
-    $("#dims").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
-    render();
-  });
-  $("#type-chips").addEventListener("click", e => {
-    const b = e.target.closest(".chip");
-    if (!b) return;
-    const t = b.dataset.type;
-    ui.types = ui.types.includes(t) ? ui.types.filter(x => x !== t) : ui.types.concat([t]);
-    render();
-  });
-  $("#q").addEventListener("input", e => { ui.q = e.target.value.trim(); render(); });
-  ["level", "group", "owner"].forEach(k => $("#f-" + k).addEventListener("change", e => { ui[k] = e.target.value; render(); }));
-  $("#f-open").addEventListener("change", e => { ui.open = e.target.checked; render(); });
-
-  const board = $("#board");
-  board.addEventListener("click", e => { const c = e.target.closest(".card"); if (c) openDrawer(c.dataset.id); });
-  board.addEventListener("keydown", e => {
-    const c = e.target.closest(".card");
-    if (c && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openDrawer(c.dataset.id); }
-  });
-  let dragId = null;
-  board.addEventListener("dragstart", e => {
-    const c = e.target.closest(".card");
-    if (!c) return;
-    dragId = c.dataset.id;
-    c.classList.add("dragging");
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", dragId);
-  });
-  board.addEventListener("dragend", e => {
-    const c = e.target.closest(".card");
-    if (c) c.classList.remove("dragging");
-    board.querySelectorAll(".col.drop").forEach(x => x.classList.remove("drop"));
-    dragId = null;
-  });
-  board.addEventListener("dragover", e => {
-    const col = e.target.closest(".col");
-    if (!col || !dragId) return;
-    e.preventDefault();
-    board.querySelectorAll(".col.drop").forEach(x => x !== col && x.classList.remove("drop"));
-    col.classList.add("drop");
-  });
-  board.addEventListener("drop", e => {
-    const col = e.target.closest(".col");
-    if (!col || !dragId) return;
-    e.preventDefault();
-    const d = dim();
-    const before = fieldOf(ev(D.events.find(x => x.event_id === dragId)), d.key);
-    if (before !== col.dataset.value) {
-      setField(dragId, d.key, col.dataset.value);
-      toast(`${d.label}：${before} → ${col.dataset.value}`);
+    toast(`${FIELD_LABEL[key]}：${fieldText(key, before)} → ${fieldText(key, value)}`);
+    if (!API) { store.set(LKEY, edits); store.set(LKEY + ":h", history); return; }
+    try {
+      const r = await fetch("api/events/" + encodeURIComponent(id), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ [key]: value }) });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error || r.status);
+      applyServer(body);
+    } catch (err) {
+      edits = prevEdits; history = prevHist; render();
+      toast("保存失败：" + err.message, true);
     }
-  });
-
-  const drawer = $("#drawer");
-  drawer.addEventListener("click", e => {
-    if (e.target.closest("#d-close")) closeDrawer();
-    if (e.target.closest("#d-revert")) { delete edits[current]; store.set(KEY, edits); renderToolbar(); render(); toast("已恢复为原始值"); }
-  });
-  drawer.addEventListener("change", e => { const f = e.target.dataset.f; if (f && current) setField(current, f, e.target.value); });
-  $("#scrim").addEventListener("click", closeDrawer);
-  document.addEventListener("keydown", e => {
-    if (e.key === "Escape" && current) closeDrawer();
-    if (e.key === "/" && document.activeElement.tagName !== "INPUT") { e.preventDefault(); $("#q").focus(); }
-  });
-
-  $("#btn-reset").addEventListener("click", () => {
-    if (!confirm(`撤销本浏览器中对 ${Object.keys(edits).length} 个事件的修改？`)) return;
-    edits = {};
-    store.del(KEY);
-    renderToolbar();
+  }
+  async function revert(id) {
+    if (!API) { delete edits[id]; delete history[id]; store.set(LKEY, edits); store.set(LKEY + ":h", history); render(); toast("已恢复为模型原始值"); return; }
+    try {
+      const r = await fetch("api/events/" + encodeURIComponent(id) + "/revert", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error || r.status);
+      applyServer(body);
+      toast("已恢复为模型原始值");
+    } catch (err) { toast("操作失败：" + err.message, true); }
+  }
+  function applyServer(b) {
+    if (Object.keys(b.edits || {}).length) edits[b.event_id] = b.edits; else delete edits[b.event_id];
+    if ((b.history || []).length) history[b.event_id] = b.history; else delete history[b.event_id];
     render();
-  });
-  $("#btn-export").addEventListener("click", () => {
-    const body = events().map(e => JSON.stringify(e)).join("\n") + "\n";
+  }
+  if (!API) history = store.get(LKEY + ":h", {});
+
+  function exportJsonl() {
+    const body = ALL.map(e => JSON.stringify(e)).join("\n") + "\n";
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([body], { type: "application/x-ndjson" }));
     a.download = "events.board.jsonl";
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
-    toast(`已导出 ${D.events.length} 个事件（含 ${Object.keys(edits).length} 处修改）`);
+    toast(`已导出 ${ALL.length} 个事件（含 ${Object.keys(edits).length} 处人工修改）`);
+  }
+  function toast(msg, err) {
+    const t = $("#toast");
+    t.textContent = msg;
+    t.classList.toggle("err", !!err);
+    t.classList.add("on");
+    clearTimeout(toast.h);
+    toast.h = setTimeout(() => t.classList.remove("on"), err ? 4000 : 2000);
+  }
+
+  // ============================================================ 同步（服务模式）
+  async function refresh() {
+    if (!API || document.hidden || pop.open) return;
+    try {
+      const r = await fetch("api/data", { cache: "no-store" });
+      if (!r.ok) throw new Error(r.status);
+      const nd = await r.json();
+      const live = $("#live");
+      if (nd.version !== D.version) {
+        D = nd; edits = nd.edits || {}; history = nd.history || {};
+        render();
+      } else if (live) live.classList.remove("off");
+    } catch (e) { const live = $("#live"); if (live) live.classList.add("off"); }
+  }
+  if (API) { setInterval(refresh, 20000); document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); }); }
+
+  // ============================================================ 交互绑定
+  $("#sidebar").addEventListener("click", ev => {
+    const b = ev.target.closest(".nav-item");
+    if (!b) return;
+    if (b.dataset.view) { ui.view = b.dataset.view; ui.f = {}; }
+    else if (b.dataset.type) { const on = (ui.f.type || []).length === 1 && ui.f.type[0] === b.dataset.type; ui.f = on ? {} : { type: [b.dataset.type] }; }
+    else if (b.dataset.group) { const on = (ui.f.group || []).length === 1 && ui.f.group[0] === b.dataset.group; ui.f = on ? {} : { group: [b.dataset.group] }; }
+    else return;
+    cursor = null;
+    $("#sidebar").classList.remove("on");
+    render();
+    $("#content").scrollTop = 0;
   });
+  $("#btn-menu").addEventListener("click", () => $("#sidebar").classList.toggle("on"));
+  $("#layout-seg").addEventListener("click", ev => { const b = ev.target.closest("[data-layout]"); if (b) { ui.layout = b.dataset.layout; render(); } });
+  $("#btn-display").addEventListener("click", ev => { if (pop.open && pop.anchor === ev.currentTarget) return closeMenu(); displayPanel(ev.currentTarget); });
+  $("#q").addEventListener("input", ev => { ui.q = ev.target.value.trim(); render(); });
+  $("#q").addEventListener("keydown", ev => { if (ev.key === "Escape") { ev.target.value = ""; ui.q = ""; ev.target.blur(); render(); } if (ev.key === "Enter" || ev.key === "ArrowDown") { ev.preventDefault(); ev.target.blur(); move(1); } });
+  $("#filterbar").addEventListener("click", ev => {
+    const t = ev.target;
+    if (t.closest("#btn-filter")) return filterMenu(t.closest("#btn-filter"));
+    if (t.closest("#btn-clear")) { ui.f = {}; return render(); }
+    const c = t.closest("[data-clear-filter]");
+    if (c) { delete ui.f[c.dataset.clearFilter]; return render(); }
+    const e = t.closest("[data-edit-filter]");
+    if (e) filterMenu(e, e.dataset.editFilter);
+  });
+
+  const content = $("#content");
+  content.addEventListener("click", ev => {
+    if (ev.target.closest("#btn-reset-filters")) { ui.f = {}; ui.q = ""; ui.view = "all"; $("#q").value = ""; return render(); }
+    const gh = ev.target.closest(".ghead");
+    if (gh) {
+      const k = ui.group + ":" + gh.dataset.g;
+      ui.collapsed = ui.collapsed.includes(k) ? ui.collapsed.filter(x => x !== k) : ui.collapsed.concat([k]);
+      return render();
+    }
+    const item = ev.target.closest("[data-id]");
+    if (!item) return;
+    const act = ev.target.closest("[data-act]");
+    cursor = item.dataset.id;
+    if (act) { markCursor(); return fieldMenu(act, item.dataset.id, act.dataset.act); }
+    openPeek(item.dataset.id);
+  });
+  let dragId = null;
+  content.addEventListener("dragstart", ev => {
+    const c = ev.target.closest(".kcard");
+    if (!c) return;
+    dragId = c.dataset.id;
+    c.classList.add("dragging");
+    ev.dataTransfer.effectAllowed = "move";
+    ev.dataTransfer.setData("text/plain", dragId);
+  });
+  content.addEventListener("dragend", ev => {
+    const c = ev.target.closest(".kcard");
+    if (c) c.classList.remove("dragging");
+    $$(".kcol.drop").forEach(x => x.classList.remove("drop"));
+    dragId = null;
+  });
+  content.addEventListener("dragover", ev => {
+    const col = ev.target.closest(".kcol");
+    if (!col || !dragId) return;
+    ev.preventDefault();
+    $$(".kcol.drop").forEach(x => x !== col && x.classList.remove("drop"));
+    col.classList.add("drop");
+  });
+  content.addEventListener("drop", ev => {
+    const col = ev.target.closest(".kcol");
+    if (!col || !dragId) return;
+    ev.preventDefault();
+    const key = ui.group === "none" ? "status" : ui.group;
+    const field = key === "group" ? null : key;
+    if (!field) return;
+    const v = col.dataset.value;
+    setField(dragId, field, field === "owner" && v === NONE ? null : v);
+  });
+
+  $("#peek").addEventListener("click", ev => {
+    if (ev.target.closest("#peek-close")) return closePeek();
+    if (ev.target.closest("#peek-revert")) return revert(current);
+    const n = ev.target.closest("[data-nav]");
+    if (n) return move(+n.dataset.nav);
+    const act = ev.target.closest("[data-act]");
+    if (act) fieldMenu(act, current, act.dataset.act);
+  });
+  $("#scrim").addEventListener("click", closePeek);
+
+  function move(d) {
+    if (!order.length) return;
+    const i = order.indexOf(cursor);
+    const next = order[Math.max(0, Math.min(order.length - 1, i < 0 ? 0 : i + d))];
+    cursor = next;
+    if (current) openPeek(next); else markCursor(true);
+  }
+  function actAnchor(field) {
+    if (current) return $(`#peek [data-act="${field}"]`);
+    const el = cursor && document.querySelector(`[data-id="${CSS.escape(cursor)}"]`);
+    return el && (el.querySelector(`[data-act="${field}"]`) || el);
+  }
+  document.addEventListener("keydown", ev => {
+    if (pop.open) { if (ev.key === "Escape") closeMenu(); return; }
+    const tag = (ev.target.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "select" || tag === "textarea") return;
+    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "b") { ev.preventDefault(); ui.layout = ui.layout === "list" ? "board" : "list"; return render(); }
+    if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    const k = ev.key;
+    if (k === "/") { ev.preventDefault(); return $("#q").focus(); }
+    if (k === "Escape") { if (current) closePeek(); else { cursor = null; markCursor(); } return; }
+    if (k === "j" || k === "ArrowDown") { ev.preventDefault(); return move(1); }
+    if (k === "k" || k === "ArrowUp") { ev.preventDefault(); return move(-1); }
+    if (k === "Enter" && cursor && !current && !ev.target.closest("button")) { ev.preventDefault(); return openPeek(cursor); }
+    if (k === "f") { ev.preventDefault(); return filterMenu($("#btn-filter")); }
+    const field = { s: "status", p: "level", a: "owner", t: "type" }[k.toLowerCase()];
+    const id = current || cursor;
+    if (field && id) { const a = actAnchor(field); if (a) { ev.preventDefault(); fieldMenu(a, id, field); } }
+  });
+
   const root = document.documentElement;
   const savedTheme = store.get("aes-board:theme", "");
   if (savedTheme) root.dataset.theme = savedTheme;
@@ -515,7 +988,9 @@ aside.drawer.on { transform: none; }
     store.set("aes-board:theme", root.dataset.theme);
   });
 
-  renderToolbar();
+  // 清理已不存在的筛选值
+  recompute();
+  for (const k of Object.keys(ui.f)) { if (!FIELDS[k]) delete ui.f[k]; }
   render();
 })();
 </script>

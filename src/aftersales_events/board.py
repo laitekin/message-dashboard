@@ -67,6 +67,11 @@ def build_payload(
     types: list[EventTypeDef] | None = None,
     messages: Iterable[Message] | None = None,
     title: str = "售后事件看板",
+    *,
+    edits: dict | None = None,
+    history: dict | None = None,
+    api: bool = False,
+    user: str | None = None,
 ) -> dict:
     type_defs = [{"name": t.name, "push_to": t.push_to} for t in (types or [])]
     known = {t["name"] for t in type_defs}
@@ -75,16 +80,24 @@ def build_payload(
             known.add(e.type)
             type_defs.append({"name": e.type, "push_to": ""})
     ids = sorted(e.event_id for e in events)
+    event_dicts = [json.loads(e.model_dump_json()) for e in events]
+    edits, history = edits or {}, history or {}
+    version = hashlib.sha1(json.dumps([event_dicts, edits, history], ensure_ascii=False, sort_keys=True).encode()).hexdigest()[:12]
     return {
         "title": title,
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         # 用事件集合生成看板 ID：同一批事件重复生成时，浏览器里的修改不会丢
         "board_id": hashlib.sha1("|".join(ids).encode()).hexdigest()[:12],
+        "version": version,
+        "api": api,
+        "user": user,
         "statuses": STATUSES,
         "levels": LEVELS,
         "types": type_defs,
-        "events": [json.loads(e.model_dump_json()) for e in events],
+        "events": event_dicts,
         "messages": evidence_messages(events, messages) if messages is not None else {},
+        "edits": edits,
+        "history": history,
     }
 
 
@@ -93,9 +106,13 @@ def _embed(payload: dict) -> str:
     return json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")
 
 
-def render_board(events: list[Event], types=None, messages=None, title: str = "售后事件看板") -> str:
+def render_html(payload: dict) -> str:
     tpl = resources.files("aftersales_events").joinpath("templates/board.html").read_text(encoding="utf-8")
-    return tpl.replace("__AES_TITLE__", html.escape(title)).replace("__AES_DATA__", _embed(build_payload(events, types, messages, title)))
+    return tpl.replace("__AES_TITLE__", html.escape(payload["title"])).replace("__AES_DATA__", _embed(payload))
+
+
+def render_board(events: list[Event], types=None, messages=None, title: str = "售后事件看板") -> str:
+    return render_html(build_payload(events, types, messages, title))
 
 
 def write_board(path: str | Path, events: list[Event], types=None, messages=None, title: str = "售后事件看板") -> Path:

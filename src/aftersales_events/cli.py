@@ -1,4 +1,4 @@
-"""命令行入口：aes fetch | preview | run | eval | board"""
+"""命令行入口：aes fetch | preview | run | eval | board | serve"""
 
 from __future__ import annotations
 
@@ -79,6 +79,20 @@ def cmd_board(args, settings) -> None:
     print(f"看板已生成 {out}：{len(events)} 个事件（来自 {len(files)} 个文件）")
 
 
+def cmd_serve(args, settings) -> None:
+    from .serve import BoardApp, make_server
+
+    app = BoardApp(settings, args.out_dir, args.raw_dir, args.state, title=args.title)
+    server = make_server(app, args.host, args.port)
+    print(f"看板服务已启动：http://{args.host}:{server.server_address[1]}/（事件目录 {args.out_dir}，修改记录 {args.state}）")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="aes", description="售后事件清洗")
     p.add_argument("--config", help="配置目录（默认 ./config）")
@@ -117,6 +131,15 @@ def main(argv: list[str] | None = None) -> None:
     sp.add_argument("--out", default="out/board.html", help="输出文件（默认 out/board.html）")
     sp.add_argument("--title", default="售后事件看板")
     sp.set_defaults(func=cmd_board)
+
+    sp = sub.add_parser("serve", help="启动看板服务（多人共享修改）")
+    sp.add_argument("--out-dir", default="out", help="扫描其中所有 events.jsonl（默认 out/）")
+    sp.add_argument("--raw-dir", default="data/raw", help="原始 JSON 目录，用于显示证据原文（默认 data/raw/）")
+    sp.add_argument("--state", default="data/board_state.json", help="人工修改与修改记录的保存位置")
+    sp.add_argument("--host", default="127.0.0.1")
+    sp.add_argument("--port", type=int, default=8470)
+    sp.add_argument("--title", default="售后事件看板")
+    sp.set_defaults(func=cmd_serve)
 
     args = p.parse_args(argv)
     logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
